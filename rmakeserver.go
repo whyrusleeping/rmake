@@ -17,7 +17,7 @@ import (
 
 type Response struct {
 	Stdout string
-	Binary []byte
+	Binary *File
 	Success bool
 	Session string
 }
@@ -29,18 +29,40 @@ type File struct {
 }
 
 func (f *File) Save(builddir string) error {
+	fmt.Printf("Saving file: '%s'\n", f.Path)
 	cur := builddir
 	spl := strings.Split(f.Path,"/")
 	for _,v := range spl[:len(spl)-1] {
 		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
-	fi,err := os.OpenFile(builddir + "/" + f.Path, os.O_CREATE, f.Mode)
+	fi,err := os.OpenFile(builddir + "/" + f.Path, os.O_CREATE | os.O_WRONLY, f.Mode)
 	if err != nil {
+		fmt.Println("File creation failed.")
 		return err
 	}
 	fi.Write(f.Contents)
+	fmt.Printf("Wrote %d bytes.\n", len(f.Contents))
+	fi.Close()
 	return nil
+}
+
+func LoadFile(path string) *File {
+	inf,err := os.Stat(path)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	f := new(File)
+	f.Path = path
+	f.Mode = inf.Mode()
+	cnts,err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	f.Contents = cnts
+	return f
 }
 
 type Package struct {
@@ -52,12 +74,12 @@ type Package struct {
 }
 
 func HandleBuild(c net.Conn) {
-	o := new(bytes.Buffer)
+	defer c.Close()
 	resp := new(Response)
 	pack := new(Package)
 	unzip,err := gzip.NewReader(c)
 	if err != nil {
-		fmt.Fprintln(o, err)
+		fmt.Println(err)
 		return
 	}
 	dec := gob.NewDecoder(unzip)
@@ -66,46 +88,46 @@ func HandleBuild(c net.Conn) {
 		fmt.Println(err)
 		return
 	}
+	defer func () {
+		zip := gzip.NewWriter(c)
+		enc := gob.NewEncoder(zip)
+		err = enc.Encode(resp)
+		if err != nil {
+			fmt.Println("Failed to respond!")
+			fmt.Println(err)
+			return
+		}
+		zip.Close()
+	}()
 	dir := pack.Session
 	if dir == "" {
 		dir = RandDir()
 	}
+	fmt.Printf("Build dir = '%s'\n", dir)
 	os.Mkdir(dir, os.ModeDir | 0777)
 	for _,f := range pack.Files {
 		f.Save(dir)
 	}
 	proc := exec.Command(pack.Command, pack.Args...)
-	serr,_ := proc.StderrPipe()
 	proc.Dir = dir
-	b,err := proc.Output()
+	fmt.Println(proc)
+	b,err := proc.CombinedOutput()
 	if err != nil {
 		fmt.Println(err)
-		b,_ := ioutil.ReadAll(serr)
 		fmt.Println(string(b))
 		/*
 		b,_ = ioutil.ReadAll(proc.Stdout)
 		fmt.Println(string(b))
 		*/
+		resp.Success = false
 		return
 	}
 	resp.Stdout = string(b)
-
-	oby,err := ioutil.ReadFile(dir + "/" + pack.Output)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	resp.Binary = oby
-
-	zip := gzip.NewWriter(c)
-	enc := gob.NewEncoder(zip)
-	err = enc.Encode(resp)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	zip.Close()
-	c.Close()
+	bin := LoadFile(dir + "/" + pack.Output)
+	bin.Path = pack.Output
+	resp.Binary = bin
+	resp.Success = true
+	return
 }
 
 func RandDir() string {

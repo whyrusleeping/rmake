@@ -14,7 +14,8 @@ import (
 
 type Response struct {
 	Stdout string
-	Binary []byte
+	Binary *File
+	Success bool
 }
 
 type File struct {
@@ -30,6 +31,7 @@ func (cf *FileInfo) LoadFile() *File {
 		return nil
 	}
 	if !inf.ModTime().After(cf.LastTime) {
+		fmt.Printf("Skipping: '%s'\n", cf.Path)
 		return nil
 	}
 	f := new(File)
@@ -42,7 +44,23 @@ func (cf *FileInfo) LoadFile() *File {
 		return nil
 	}
 	f.Contents = cnts
+	fmt.Printf("file was %d bytes.\n", len(cnts))
 	return f
+}
+
+func (f *File) Save() error {
+	cur := "."
+	spl := strings.Split(f.Path,"/")
+	for _,v := range spl[:len(spl)-1] {
+		cur += "/" + v
+		os.Mkdir(cur, os.ModeDir | 0777)
+	}
+	fi,err := os.OpenFile(f.Path, os.O_CREATE, f.Mode)
+	if err != nil {
+		return err
+	}
+	fi.Write(f.Contents)
+	return nil
 }
 
 type Package struct {
@@ -59,7 +77,10 @@ func NewPackage(conf *RMakeConf) *Package {
 	p.Command = conf.Command
 	p.Args = conf.Args
 	for _,v := range conf.Files {
-		p.Files = append(p.Files, v.LoadFile())
+		f := v.LoadFile()
+		if f != nil {
+			p.Files = append(p.Files, f)
+		}
 	}
 	return p
 }
@@ -109,18 +130,17 @@ func (rmc *RMakeConf) DoBuild() error {
 		return err
 	}
 
-	out,err := os.Create(rmc.Output)
+	if !resp.Success {
+		fmt.Println("Build failed.")
+		fmt.Println(resp.Stdout)
+		return nil
+	}
+	err = resp.Binary.Save()
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
-	defer out.Close()
 
-	_,err = out.Write(resp.Binary)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
 	fmt.Println(resp.Stdout)
 	return nil
 }
@@ -164,12 +184,14 @@ func main() {
 			fmt.Println(err)
 		}
 		rmc.Save("rmake.json")
+		return
 	}
 	switch os.Args[1] {
 		case "add":
 			for _,v := range os.Args[2:] {
 				fi := new(FileInfo)
 				fi.Path = v
+				fi.LastTime = time.Now().AddDate(-10,0,0)
 				rmc.Files = append(rmc.Files, fi)
 			}
 		case "server":
@@ -180,6 +202,11 @@ func main() {
 			rmc.Args = toks[1:]
 		case "bin":
 			rmc.Output = os.Args[2]
+		case "clean":
+			for _,v := range rmc.Files {
+				v.LastTime = time.Now().AddDate(-20,0,0)
+			}
+			rmc.Session = ""
 	}
 	rmc.Save("rmake.json")
 }
