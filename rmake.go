@@ -69,6 +69,7 @@ type Package struct {
 	Args []string
 	Output string
 	Session string
+	Vars map[string]string
 }
 
 func NewPackage(conf *RMakeConf) *Package {
@@ -97,6 +98,13 @@ type RMakeConf struct {
 	Args []string
 	Output string
 	Session string
+	Vars map[string]string
+}
+
+func NewRMakeConf() *RMakeConf {
+	rmc := new(RMakeConf)
+	rmc.Vars = make(map[string]string)
+	return rmc
 }
 
 func (rmc *RMakeConf) DoBuild() error {
@@ -214,7 +222,7 @@ func printHelp(which string) {
 func main() {
 	rmc := LoadRMakeConf("rmake.json")
 	if rmc == nil {
-		rmc = new(RMakeConf)
+		rmc = NewRMakeConf()
 	}
 	if len(os.Args) == 1 {
 		err := rmc.DoBuild()
@@ -245,6 +253,8 @@ func main() {
 				v.LastTime = time.Now().AddDate(-20,0,0)
 			}
 			rmc.Session = ""
+		case "var":
+			rmc.Vars[os.Args[2]] = os.Args[3]
 		case "help":
 			if len(os.Args) == 2 {
 				printHelp("all")

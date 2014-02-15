@@ -71,6 +71,7 @@ type Package struct {
 	Args []string
 	Session string
 	Output string
+	Vars map[string]string
 }
 
 func HandleBuild(c net.Conn) {
@@ -99,6 +100,9 @@ func HandleBuild(c net.Conn) {
 		}
 		zip.Close()
 	}()
+	for key,val := range pack.Vars {
+		os.Setenv(key,val)
+	}
 	dir := pack.Session
 	if dir == "" {
 		dir = RandDir()
