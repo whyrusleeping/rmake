@@ -169,8 +169,46 @@ func (rmc *RMakeConf) Save(file string) error {
 	return enc.Encode(rmc)
 }
 
-func printHelp() {
-	fmt.Println("Usage: rmake option params")
+func printHelpAdd() {
+	fmt.Println("rmake add: Adds files to be used in the build process.")
+}
+
+func printHelpBin() {
+	fmt.Println("rmake bin: set the name of the output binary to return.")
+}
+
+func printHelpScr() {
+	fmt.Println("rmake scr: set the build command to run on the server.")
+}
+
+func printHelpServer() {
+	fmt.Println("rmake server: set the url and port of the build server.")
+}
+
+func printHelpClean() {
+	fmt.Println("rmake clean: resets mod times on your files and starts a new session with the build server.")
+}
+
+func printHelp(which string) {
+	switch which {
+	case "add":
+		printHelpAdd()
+	case "bin":
+		printHelpBin()
+	case "server":
+		printHelpServer()
+	case "scr":
+		printHelpScr()
+	case "clean":
+		printHelpClean()
+	default:
+		fmt.Println("Usage: rmake [command] [args...]")
+		printHelpAdd()
+		printHelpBin()
+		printHelpScr()
+		printHelpServer()
+		printHelpClean()
+	}
 }
 
 func main() {
@@ -207,6 +245,12 @@ func main() {
 				v.LastTime = time.Now().AddDate(-20,0,0)
 			}
 			rmc.Session = ""
+		case "help":
+			if len(os.Args) == 2 {
+				printHelp("all")
+			} else {
+				printHelp(os.Args[2])
+			}
 	}
 	rmc.Save("rmake.json")
 }
