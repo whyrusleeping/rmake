@@ -30,7 +30,7 @@ func (f *File) Save(builddir string) error {
 	cur := builddir
 	spl := strings.Split(f.Path,"/")
 	for _,v := range spl[:len(spl)-1] {
-		cur += v
+		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
 	fi,err := os.Create(builddir + "/" + f.Path)
@@ -69,10 +69,17 @@ func HandleBuild(c net.Conn) {
 		f.Save(dir)
 	}
 	proc := exec.Command(pack.Command, pack.Args...)
+	serr,_ := proc.StderrPipe()
 	proc.Dir = dir
 	b,err := proc.Output()
 	if err != nil {
 		fmt.Println(err)
+		b,_ := ioutil.ReadAll(serr)
+		fmt.Println(string(b))
+		/*
+		b,_ = ioutil.ReadAll(proc.Stdout)
+		fmt.Println(string(b))
+		*/
 		return
 	}
 	resp.Stdout = string(b)
