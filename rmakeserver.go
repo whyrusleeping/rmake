@@ -19,11 +19,13 @@ type Response struct {
 	Stdout string
 	Binary []byte
 	Success bool
+	Session string
 }
 
 type File struct {
 	Path string
 	Contents []byte
+	Mode os.FileMode
 }
 
 func (f *File) Save(builddir string) error {
@@ -33,7 +35,7 @@ func (f *File) Save(builddir string) error {
 		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
-	fi,err := os.Create(builddir + "/" + f.Path)
+	fi,err := os.OpenFile(builddir + "/" + f.Path, os.O_CREATE, f.Mode)
 	if err != nil {
 		return err
 	}
@@ -45,12 +47,11 @@ type Package struct {
 	Files []*File
 	Command string
 	Args []string
+	Session string
 	Output string
 }
 
 func HandleBuild(c net.Conn) {
-	dir := RandDir()
-	os.Mkdir(dir, os.ModeDir | 0777)
 	o := new(bytes.Buffer)
 	resp := new(Response)
 	pack := new(Package)
@@ -65,6 +66,11 @@ func HandleBuild(c net.Conn) {
 		fmt.Println(err)
 		return
 	}
+	dir := pack.Session
+	if dir == "" {
+		dir = RandDir()
+	}
+	os.Mkdir(dir, os.ModeDir | 0777)
 	for _,f := range pack.Files {
 		f.Save(dir)
 	}

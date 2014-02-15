@@ -4,6 +4,7 @@ import (
 	"os"
 	"fmt"
 	"net"
+	"time"
 	"strings"
 	"io/ioutil"
 	"encoding/gob"
@@ -19,12 +20,23 @@ type Response struct {
 type File struct {
 	Path string
 	Contents []byte
+	Mode os.FileMode
 }
 
-func LoadFile(path string) *File {
+func (cf *FileInfo) LoadFile() *File {
+	inf,err := os.Stat(cf.Path)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	if !inf.ModTime().After(cf.LastTime) {
+		return nil
+	}
 	f := new(File)
-	f.Path = path
-	cnts,err := ioutil.ReadFile(path)
+	f.Path = cf.Path
+	f.Mode = inf.Mode()
+	cf.LastTime = time.Now()
+	cnts,err := ioutil.ReadFile(cf.Path)
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -38,6 +50,7 @@ type Package struct {
 	Command string
 	Args []string
 	Output string
+	Session string
 }
 
 func NewPackage(conf *RMakeConf) *Package {
@@ -46,26 +59,23 @@ func NewPackage(conf *RMakeConf) *Package {
 	p.Command = conf.Command
 	p.Args = conf.Args
 	for _,v := range conf.Files {
-		p.Files = append(p.Files, LoadFile(v))
+		p.Files = append(p.Files, v.LoadFile())
 	}
 	return p
 }
 
-/* Example rmake.json
-{
-	"Server" : "jero.my:11221",
-	"Files":["makefile","src/main.cpp","src/main.h","src/something.h"],
-	"BuildScr" : "make",
-	"Output" : "a.out"
+type FileInfo struct {
+	Path string
+	LastTime time.Time
 }
-*/
 
 type RMakeConf struct {
 	Server string
-	Files []string
+	Files []*FileInfo
 	Command string
 	Args []string
 	Output string
+	Session string
 }
 
 func (rmc *RMakeConf) DoBuild() error {
@@ -153,12 +163,14 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		return
+		rmc.Save("rmake.json")
 	}
 	switch os.Args[1] {
 		case "add":
 			for _,v := range os.Args[2:] {
-				rmc.Files = append(rmc.Files, v)
+				fi := new(FileInfo)
+				fi.Path = v
+				rmc.Files = append(rmc.Files, fi)
 			}
 		case "server":
 			rmc.Server = os.Args[2]
