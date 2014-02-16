@@ -29,7 +29,6 @@ type File struct {
 }
 
 func (f *File) Save(builddir string) error {
-	fmt.Printf("Saving file: '%s'\n", f.Path)
 	cur := builddir
 	spl := strings.Split(f.Path,"/")
 	for _,v := range spl[:len(spl)-1] {
@@ -42,7 +41,6 @@ func (f *File) Save(builddir string) error {
 		return err
 	}
 	fi.Write(f.Contents)
-	fmt.Printf("Wrote %d bytes.\n", len(f.Contents))
 	fi.Close()
 	return nil
 }
@@ -125,6 +123,7 @@ func HandleConnection(c net.Conn) {
 	if dir == "" {
 		dir = RandDir()
 	}
+	dir = "build/" + dir
 	fmt.Printf("Build dir = '%s'\n", dir)
 	os.Mkdir(dir, os.ModeDir | 0777)
 	for _,f := range pack.Files {
@@ -154,8 +153,12 @@ func RandDir() string {
 }
 
 func main() {
+	listname := ":11221"
+	if len(os.Args) == 2 {
+		listname = os.Args[1]
+	}
 	os.Mkdir("build", os.ModeDir | 0777)
-	list,err := net.Listen("tcp",":11221")
+	list,err := net.Listen("tcp",listname)
 	if err != nil {
 		panic(err)
 	}
