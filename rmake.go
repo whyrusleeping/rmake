@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 	"strings"
+	"io"
 	"io/ioutil"
 	"encoding/gob"
 	"encoding/json"
@@ -31,7 +32,6 @@ func (cf *FileInfo) LoadFile() *File {
 		return nil
 	}
 	if !inf.ModTime().After(cf.LastTime) {
-		fmt.Printf("Skipping: '%s'\n", cf.Path)
 		return nil
 	}
 	f := new(File)
@@ -44,7 +44,6 @@ func (cf *FileInfo) LoadFile() *File {
 		return nil
 	}
 	f.Contents = cnts
-	fmt.Printf("file was %d bytes.\n", len(cnts))
 	return f
 }
 
@@ -99,6 +98,7 @@ type RMakeConf struct {
 	Output string
 	Session string
 	Vars map[string]string
+	Compression string
 }
 
 func NewRMakeConf() *RMakeConf {
@@ -111,30 +111,26 @@ func (rmc *RMakeConf) DoBuild() error {
 	pack := NewPackage(rmc)
 	con,err := net.Dial("tcp", rmc.Server)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	defer con.Close()
-	zipp := gzip.NewWriter(con)
+	zipp := rmc.Gzipper(con)
 	enc := gob.NewEncoder(zipp)
 	err = enc.Encode(pack)
-	//Make sure all data gets flushed through
-	zipp.Close()
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
+	//Make sure all data gets flushed through
+	zipp.Close()
 
 	resp := new(Response)
 	unzip,err := gzip.NewReader(con)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	dec := gob.NewDecoder(unzip)
 	err = dec.Decode(resp)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -145,7 +141,6 @@ func (rmc *RMakeConf) DoBuild() error {
 	}
 	err = resp.Binary.Save()
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -153,18 +148,35 @@ func (rmc *RMakeConf) DoBuild() error {
 	return nil
 }
 
-func LoadRMakeConf(file string) *RMakeConf {
+func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
+	complev := gzip.DefaultCompression
+	switch rmc.Compression {
+	case "best":
+		complev = gzip.BestCompression
+	case "none":
+		complev = gzip.NoCompression
+	case "speed":
+		complev = gzip.BestSpeed
+	}
+	zipper,err := gzip.NewWriterLevel(w, complev)
+	if err != nil {
+		panic(err)
+	}
+	return zipper
+}
+
+func LoadRMakeConf(file string) (*RMakeConf,error) {
 	fi,err := os.Open(file)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	rmc := new(RMakeConf)
 	dec := json.NewDecoder(fi)
 	err = dec.Decode(rmc)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return rmc
+	return rmc,nil
 }
 
 func (rmc *RMakeConf) Save(file string) error {
@@ -197,6 +209,16 @@ func printHelpClean() {
 	fmt.Println("rmake clean: resets mod times on your files and starts a new session with the build server.")
 }
 
+func printHelpVar() {
+	fmt.Println("rmake var: ex: 'rmake var CFLAGS \"-O2 -g\"'")
+	fmt.Println("\tSet environment variables on the build server.")
+}
+
+func printHelpCompress() {
+	fmt.Println("rmake compress: 'rmake compress best'")
+	fmt.Println("\tSet compression level for communications with the server.")
+}
+
 func printHelp(which string) {
 	switch which {
 	case "add":
@@ -209,6 +231,10 @@ func printHelp(which string) {
 		printHelpScr()
 	case "clean":
 		printHelpClean()
+	case "compress":
+		printHelpCompress()
+	case "var":
+		printHelpVar()
 	default:
 		fmt.Println("Usage: rmake [command] [args...]")
 		printHelpAdd()
@@ -216,12 +242,14 @@ func printHelp(which string) {
 		printHelpScr()
 		printHelpServer()
 		printHelpClean()
+		printHelpVar()
+		printHelpCompress()
 	}
 }
 
 func main() {
-	rmc := LoadRMakeConf("rmake.json")
-	if rmc == nil {
+	rmc,err := LoadRMakeConf("rmake.json")
+	if err != nil {
 		rmc = NewRMakeConf()
 	}
 	if len(os.Args) == 1 {
@@ -233,34 +261,40 @@ func main() {
 		return
 	}
 	switch os.Args[1] {
-		case "add":
-			for _,v := range os.Args[2:] {
-				fi := new(FileInfo)
-				fi.Path = v
-				fi.LastTime = time.Now().AddDate(-10,0,0)
-				rmc.Files = append(rmc.Files, fi)
-			}
-		case "server":
-			rmc.Server = os.Args[2]
-		case "scr":
-			toks := strings.Split(os.Args[2], " ")
-			rmc.Command = toks[0]
-			rmc.Args = toks[1:]
-		case "bin":
-			rmc.Output = os.Args[2]
-		case "clean":
-			for _,v := range rmc.Files {
-				v.LastTime = time.Now().AddDate(-20,0,0)
-			}
-			rmc.Session = ""
-		case "var":
-			rmc.Vars[os.Args[2]] = os.Args[3]
-		case "help":
-			if len(os.Args) == 2 {
-				printHelp("all")
-			} else {
-				printHelp(os.Args[2])
-			}
+	case "add":
+		for _,v := range os.Args[2:] {
+			fi := new(FileInfo)
+			fi.Path = v
+			fi.LastTime = time.Now().AddDate(-10,0,0)
+			rmc.Files = append(rmc.Files, fi)
+		}
+	case "server":
+		rmc.Server = os.Args[2]
+	case "scr":
+		toks := strings.Split(os.Args[2], " ")
+		rmc.Command = toks[0]
+		rmc.Args = toks[1:]
+	case "bin":
+		rmc.Output = os.Args[2]
+	case "clean":
+		for _,v := range rmc.Files {
+			v.LastTime = time.Now().AddDate(-20,0,0)
+		}
+		rmc.Session = ""
+	case "var":
+		rmc.Vars[os.Args[2]] = os.Args[3]
+	case "compress":
+		if len(os.Args) == 2 {
+			printHelpCompress()
+		} else {
+			rmc.Compression = os.Args[2]
+		}
+	case "help":
+		if len(os.Args) == 2 {
+			printHelp("all")
+		} else {
+			printHelp(os.Args[2])
+		}
 	}
 	rmc.Save("rmake.json")
 }

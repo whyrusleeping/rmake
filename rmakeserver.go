@@ -74,21 +74,39 @@ type Package struct {
 	Vars map[string]string
 }
 
-func HandleBuild(c net.Conn) {
-	defer c.Close()
-	resp := new(Response)
+func (p *Package) MakeCmd(dir string) *exec.Cmd {
+	proc := exec.Command(p.Command, p.Args...)
+	proc.Dir = dir
+	for k,v := range p.Vars {
+		proc.Env = append(proc.Env, fmt.Sprintf("%s=%s",k,v))
+	}
+	return proc
+}
+
+func ReadPackage(c net.Conn) (*Package, error) {
 	pack := new(Package)
 	unzip,err := gzip.NewReader(c)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil,err
 	}
 	dec := gob.NewDecoder(unzip)
 	err = dec.Decode(pack)
 	if err != nil {
+		return nil,err
+	}
+	return pack, nil
+}
+
+func HandleConnection(c net.Conn) {
+	defer c.Close()
+	pack,err := ReadPackage(c)
+	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	resp := new(Response)
+
+	//No matter how this function ends, we want to send a response back
 	defer func () {
 		zip := gzip.NewWriter(c)
 		enc := gob.NewEncoder(zip)
@@ -112,17 +130,12 @@ func HandleBuild(c net.Conn) {
 	for _,f := range pack.Files {
 		f.Save(dir)
 	}
-	proc := exec.Command(pack.Command, pack.Args...)
-	proc.Dir = dir
+	proc := pack.MakeCmd(dir)
 	fmt.Println(proc)
 	b,err := proc.CombinedOutput()
 	if err != nil {
 		fmt.Println(err)
-		fmt.Println(string(b))
-		/*
-		b,_ = ioutil.ReadAll(proc.Stdout)
-		fmt.Println(string(b))
-		*/
+		resp.Stdout = string(b)
 		resp.Success = false
 		return
 	}
@@ -152,6 +165,6 @@ func main() {
 			fmt.Println(err)
 			continue
 		}
-		go HandleBuild(con)
+		go HandleConnection(con)
 	}
 }
