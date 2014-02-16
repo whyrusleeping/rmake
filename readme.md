@@ -30,4 +30,22 @@ As of now, rmake only supports the return of a single file, if it is needed, sup
 
 After all that, simple run `rmake` to perform a build! Its that easy!
 
+##Extra Options
+
+If needed, you can change the compression level used for communication between the client and the build server.
+
+	//Use best compression (higher CPU use)
+    rmake compress best
+
+	//Use fastest compression (Higher bandwidth costs)
+	rmake compress fast
+
+	//Dont use compression (no extra CPU cost, high bandwidth cost)
+	rmake compress none
+
+Another feature rmake provides is the ability to specify environment variables for the servers build environment.
+
+	rmake var CFLAGS "-O2 -g -Wall"
+	rmake var CXX clang++
+
 Feedback, bug reports and feature requests are very much appreciated and wanted!
