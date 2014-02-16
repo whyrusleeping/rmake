@@ -48,4 +48,10 @@ Another feature rmake provides is the ability to specify environment variables f
 	rmake var CFLAGS "-O2 -g -Wall"
 	rmake var CXX clang++
 
+##Installation
+Installation is pretty simple with go get. First, make sure you have go installed and your gopath configured. Then, simply:
+
+	go get github.com/whyrusleeping/rmake/rmake
+	go get github.com/whyrusleeping/rmake/rmakeserver
+	
 Feedback, bug reports and feature requests are very much appreciated and wanted!
