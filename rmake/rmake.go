@@ -58,7 +58,10 @@ func (f *File) Save() error {
 	if err != nil {
 		return err
 	}
-	fi.Write(f.Contents)
+	n,err := fi.Write(f.Contents)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
