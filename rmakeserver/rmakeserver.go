@@ -106,6 +106,7 @@ func HandleConnection(c net.Conn) {
 
 	//No matter how this function ends, we want to send a response back
 	defer func () {
+		fmt.Println("Deferred processing now taking place.")
 		zip := gzip.NewWriter(c)
 		enc := gob.NewEncoder(zip)
 		err = enc.Encode(resp)
@@ -114,6 +115,7 @@ func HandleConnection(c net.Conn) {
 			fmt.Println(err)
 			return
 		}
+		fmt.Println("Encoding Finished!")
 		zip.Close()
 	}()
 	for key,val := range pack.Vars {
@@ -130,7 +132,6 @@ func HandleConnection(c net.Conn) {
 		f.Save(dir)
 	}
 	proc := pack.MakeCmd(dir)
-	fmt.Println(proc)
 	b,err := proc.CombinedOutput()
 	if err != nil {
 		fmt.Println(err)
@@ -139,7 +140,9 @@ func HandleConnection(c net.Conn) {
 		return
 	}
 	resp.Stdout = string(b)
+	fmt.Println("Loading output.")
 	bin := LoadFile(dir + "/" + pack.Output)
+	fmt.Printf("Binary size: %d\n", len(bin.Contents))
 	bin.Path = pack.Output
 	resp.Binary = bin
 	resp.Success = true

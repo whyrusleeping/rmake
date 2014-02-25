@@ -139,6 +139,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		fmt.Println(resp.Stdout)
 		return nil
 	}
+	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
 	err = resp.Binary.Save()
 	if err != nil {
 		return err
