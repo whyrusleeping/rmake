@@ -131,6 +131,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	dec := gob.NewDecoder(unzip)
 	err = dec.Decode(resp)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
@@ -142,6 +143,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
 	err = resp.Binary.Save()
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
