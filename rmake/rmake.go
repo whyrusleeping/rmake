@@ -80,6 +80,7 @@ func NewPackage(conf *RMakeConf) *Package {
 	p.Output = conf.Output
 	p.Command = conf.Command
 	p.Args = conf.Args
+	p.Session = conf.Session
 	for _,v := range conf.Files {
 		f := v.LoadFile()
 		if f != nil {
