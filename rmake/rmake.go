@@ -54,7 +54,7 @@ func (f *File) Save() error {
 		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
-	fi,err := os.OpenFile(f.Path, os.O_CREATE, f.Mode)
+	fi,err := os.OpenFile(f.Path, os.O_CREATE | os.O_WRONLY, f.Mode)
 	if err != nil {
 		return err
 	}
