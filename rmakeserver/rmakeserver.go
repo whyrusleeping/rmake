@@ -125,6 +125,7 @@ func HandleConnection(c net.Conn) {
 	if dir == "" {
 		dir = RandDir()
 	}
+	resp.Session = dir
 	dir = "build/" + dir
 	fmt.Printf("Build dir = '%s'\n", dir)
 	os.Mkdir(dir, os.ModeDir | 0777)

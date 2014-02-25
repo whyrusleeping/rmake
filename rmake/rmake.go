@@ -17,6 +17,7 @@ type Response struct {
 	Stdout string
 	Binary *File
 	Success bool
+	Session string
 }
 
 type File struct {
@@ -144,6 +145,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		return nil
 	}
 	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
+	rmc.Session = resp.Session
 	err = resp.Binary.Save()
 	if err != nil {
 		fmt.Println(err)
