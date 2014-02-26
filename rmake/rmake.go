@@ -3,12 +3,14 @@ package main
 import (
 	"os"
 	"fmt"
+	"path/filepath"
 	"net"
 	"time"
 	"strings"
 	"io"
 	"io/ioutil"
 	"encoding/gob"
+	"github.com/dustin/go-humanize"
 	"encoding/json"
 	"compress/gzip"
 )
@@ -105,6 +107,60 @@ func NewRMakeConf() *RMakeConf {
 	rmc := new(RMakeConf)
 	rmc.Vars = make(map[string]string)
 	return rmc
+}
+func (rmc *RMakeConf) Status() error {
+	fmt.Println("\x1b[0m# Current working tree status\x1b[0m")
+	fmt.Println("\x1b[0m#   (use \"rmake remove <file>...\" to no longer track the file)\x1b[0m")
+	fmt.Println("#")
+	fmt.Println("\x1b[0m# Modified files to be updated\x1b[0m")
+	fmt.Println("#")
+
+	for _,v := range rmc.Files {
+		inf,err := os.Stat(v.Path)
+		if err != nil {
+			fmt.Println(err)
+			return nil
+		}
+		if inf.ModTime().After(v.LastTime) {
+			fmt.Printf("#       \x1b[0;31m%-20s\x1b[1;30m %s\x1b[0m\n", v.Path, humanize.Time(inf.ModTime()))
+		}
+	}
+
+	fmt.Println("#")
+	fmt.Println("\x1b[0m# Non modified files\x1b[0m")
+	fmt.Println("#")
+
+	for _,v := range rmc.Files {
+		inf,err := os.Stat(v.Path)
+		if err != nil {
+			fmt.Println(err)
+			return nil
+		}
+		if !inf.ModTime().After(v.LastTime) {
+			fmt.Printf("#       \x1b[0;32m%s\x1b[0m\n", v.Path)
+		}
+	}
+
+	fmt.Println("#")
+	fmt.Println("\x1b[0m# Untracked files:\x1b[0m")
+	fmt.Println("\x1b[0m#   (use \"rmake add <file>...\" to include in what will be transfered)\x1b[0m")
+	fmt.Println("#")
+	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if path == "." || path == ".."  {
+			return nil
+		}
+		
+		for _,v := range rmc.Files {
+			if path == v.Path {
+				return nil
+			}
+		}
+
+		fmt.Printf("#       %s\n", path);
+		return nil
+	})
+
+	return nil
 }
 
 func (rmc *RMakeConf) DoBuild() error {
@@ -292,6 +348,8 @@ func main() {
 		} else {
 			rmc.Compression = os.Args[2]
 		}
+	case "status":
+		rmc.Status()
 	case "help":
 		if len(os.Args) == 2 {
 			printHelp("all")
