@@ -17,6 +17,7 @@ import (
 
 type Response struct {
 	Stdout string
+	Error string
 	Binary *File
 	Success bool
 	Session string
@@ -136,6 +137,7 @@ func HandleConnection(c net.Conn) {
 	b,err := proc.CombinedOutput()
 	if err != nil {
 		fmt.Println(err)
+		resp.Error = err.Error()
 		resp.Stdout = string(b)
 		resp.Success = false
 		return

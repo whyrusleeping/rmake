@@ -275,6 +275,7 @@ func main() {
 			fi := new(FileInfo)
 			fi.Path = v
 			fi.LastTime = time.Now().AddDate(-10,0,0)
+			fmt.Printf("Adding: '%s'\n", v)
 			rmc.Files = append(rmc.Files, fi)
 		}
 	case "server":
