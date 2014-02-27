@@ -19,6 +19,7 @@ type Response struct {
 	Stdout string
 	Binary *File
 	Success bool
+	Session string
 }
 
 type File struct {
@@ -56,11 +57,14 @@ func (f *File) Save() error {
 		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
-	fi,err := os.OpenFile(f.Path, os.O_CREATE, f.Mode)
+	fi,err := os.OpenFile(f.Path, os.O_CREATE | os.O_WRONLY, f.Mode)
 	if err != nil {
 		return err
 	}
-	fi.Write(f.Contents)
+	_,err = fi.Write(f.Contents)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -78,6 +82,7 @@ func NewPackage(conf *RMakeConf) *Package {
 	p.Output = conf.Output
 	p.Command = conf.Command
 	p.Args = conf.Args
+	p.Session = conf.Session
 	for _,v := range conf.Files {
 		f := v.LoadFile()
 		if f != nil {
@@ -197,6 +202,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		return nil
 	}
 	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
+	rmc.Session = resp.Session
 	err = resp.Binary.Save()
 	if err != nil {
 		fmt.Println(err)
