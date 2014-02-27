@@ -151,10 +151,10 @@ func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m#   (use \"rmake add <file>...\" to include in what will be transfered)\x1b[0m")
 	fmt.Println("#")
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if path == "." || path == ".."  {
+		if path[0] == '.' {
 			return nil
 		}
-		
+
 		for _,v := range rmc.Files {
 			if path == v.Path {
 				return nil
