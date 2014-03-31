@@ -15,11 +15,22 @@ import (
 	"crypto/rand"
 )
 
+//The data that is sent back to the client after the build
+//is completed
 type Response struct {
+	//Everything printed to stdout
 	Stdout string
+
+	//Any error that was encountered
 	Error string
+
+	//The built program
 	Binary *File
+
+	//Whether or not the build threw a non-zero exit code
 	Success bool
+
+	//The session used for this build
 	Session string
 }
 
@@ -121,30 +132,36 @@ func HandleConnection(c net.Conn) {
 		c.Close()
 		fmt.Println("Great Success!")
 	}()
+
+	//Set all specified vars
 	for key,val := range pack.Vars {
 		os.Setenv(key,val)
 	}
+
+	//If the user has an existing session, use it.
 	dir := pack.Session
 	if dir == "" {
+		//Otherwise, Get a random dir-name
 		dir = RandDir()
 	}
 	resp.Session = dir
 	dir = "build/" + dir
 	fmt.Printf("Build dir = '%s'\n", dir)
 	os.Mkdir(dir, os.ModeDir | 0777)
+
+	//Write all needed files/updates to disk
 	for _,f := range pack.Files {
 		f.Save(dir)
 	}
 	proc := pack.MakeCmd(dir)
 	b,err := proc.CombinedOutput()
+	resp.Stdout = string(b)
 	if err != nil {
 		fmt.Println(err)
 		resp.Error = err.Error()
-		resp.Stdout = string(b)
 		resp.Success = false
 		return
 	}
-	resp.Stdout = string(b)
 	fmt.Println("Loading output.")
 	bin := LoadFile(dir + "/" + pack.Output)
 	fmt.Printf("Binary size: %d\n", len(bin.Contents))
@@ -170,6 +187,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	for {
 		con,err := list.Accept()
 		if err != nil {

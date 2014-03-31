@@ -17,6 +17,7 @@ import (
 
 type Response struct {
 	Stdout string
+	Error string
 	Binary *File
 	Success bool
 	Session string
@@ -177,6 +178,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	if !resp.Success {
 		fmt.Println("Build failed.")
 		fmt.Println(resp.Stdout)
+		fmt.Println(resp.Error)
 		rmc.Clean()
 		return nil
 	}
