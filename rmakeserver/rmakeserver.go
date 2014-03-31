@@ -97,10 +97,10 @@ func ReadPackage(c net.Conn) (*Package, error) {
 }
 
 func HandleConnection(c net.Conn) {
-	defer c.Close()
 	pack,err := ReadPackage(c)
 	if err != nil {
 		fmt.Println(err)
+		c.Close()
 		return
 	}
 	resp := new(Response)
@@ -118,6 +118,8 @@ func HandleConnection(c net.Conn) {
 		}
 		fmt.Println("Encoding Finished!")
 		zip.Close()
+		c.Close()
+		fmt.Println("Great Success!")
 	}()
 	for key,val := range pack.Vars {
 		os.Setenv(key,val)

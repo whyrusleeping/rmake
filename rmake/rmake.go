@@ -8,7 +8,7 @@ import (
 	"time"
 	"strings"
 	"io"
-	"io/ioutil"
+	"bufio"
 	"encoding/gob"
 	"github.com/dustin/go-humanize"
 	"encoding/json"
@@ -20,52 +20,6 @@ type Response struct {
 	Binary *File
 	Success bool
 	Session string
-}
-
-type File struct {
-	Path string
-	Contents []byte
-	Mode os.FileMode
-}
-
-func (cf *FileInfo) LoadFile() *File {
-	inf,err := os.Stat(cf.Path)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-	if !inf.ModTime().After(cf.LastTime) {
-		return nil
-	}
-	f := new(File)
-	f.Path = cf.Path
-	f.Mode = inf.Mode()
-	cf.LastTime = time.Now()
-	cnts,err := ioutil.ReadFile(cf.Path)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-	f.Contents = cnts
-	return f
-}
-
-func (f *File) Save() error {
-	cur := "."
-	spl := strings.Split(f.Path,"/")
-	for _,v := range spl[:len(spl)-1] {
-		cur += "/" + v
-		os.Mkdir(cur, os.ModeDir | 0777)
-	}
-	fi,err := os.OpenFile(f.Path, os.O_CREATE | os.O_WRONLY, f.Mode)
-	if err != nil {
-		return err
-	}
-	_,err = fi.Write(f.Contents)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 type Package struct {
@@ -106,6 +60,7 @@ type RMakeConf struct {
 	Session string
 	Vars map[string]string
 	Compression string
+	ignore []string
 }
 
 func NewRMakeConf() *RMakeConf {
@@ -113,6 +68,29 @@ func NewRMakeConf() *RMakeConf {
 	rmc.Vars = make(map[string]string)
 	return rmc
 }
+
+func (rmc *RMakeConf) LoadIgnores(igfile string) {
+	fi,err := os.Open(igfile)
+	if err != nil {
+		return
+	}
+	scan := bufio.NewScanner(fi)
+	for scan.Scan() {
+		rmc.ignore = append(rmc.ignore, scan.Text())
+	}
+}
+
+func (rmc *RMakeConf) Clean() {
+	for _,v := range rmc.Files {
+		v.LastTime = time.Now().AddDate(-20,0,0)
+	}
+	rmc.Session = ""
+}
+
+func (rmc *RMakeConf) IsIgnored(fi string) bool {
+	return false
+}
+
 func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Current working tree status\x1b[0m")
 	fmt.Println("\x1b[0m#   (use \"rmake remove <file>...\" to no longer track the file)\x1b[0m")
@@ -199,6 +177,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	if !resp.Success {
 		fmt.Println("Build failed.")
 		fmt.Println(resp.Stdout)
+		rmc.Clean()
 		return nil
 	}
 	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
@@ -241,6 +220,7 @@ func LoadRMakeConf(file string) (*RMakeConf,error) {
 	if err != nil {
 		return nil, err
 	}
+	rmc.LoadIgnores(".rmakeignore")
 	return rmc,nil
 }
 
@@ -250,66 +230,9 @@ func (rmc *RMakeConf) Save(file string) error {
 		return err
 	}
 	defer fi.Close()
-	enc := json.NewEncoder(fi)
-	return enc.Encode(rmc)
-}
-
-func printHelpAdd() {
-	fmt.Println("rmake add: Adds files to be used in the build process.")
-}
-
-func printHelpBin() {
-	fmt.Println("rmake bin: set the name of the output binary to return.")
-}
-
-func printHelpScr() {
-	fmt.Println("rmake scr: set the build command to run on the server.")
-}
-
-func printHelpServer() {
-	fmt.Println("rmake server: set the url and port of the build server.")
-}
-
-func printHelpClean() {
-	fmt.Println("rmake clean: resets mod times on your files and starts a new session with the build server.")
-}
-
-func printHelpVar() {
-	fmt.Println("rmake var: ex: 'rmake var CFLAGS \"-O2 -g\"'")
-	fmt.Println("\tSet environment variables on the build server.")
-}
-
-func printHelpCompress() {
-	fmt.Println("rmake compress: 'rmake compress best'")
-	fmt.Println("\tSet compression level for communications with the server.")
-}
-
-func printHelp(which string) {
-	switch which {
-	case "add":
-		printHelpAdd()
-	case "bin":
-		printHelpBin()
-	case "server":
-		printHelpServer()
-	case "scr":
-		printHelpScr()
-	case "clean":
-		printHelpClean()
-	case "compress":
-		printHelpCompress()
-	case "var":
-		printHelpVar()
-	default:
-		fmt.Println("Usage: rmake [command] [args...]")
-		printHelpAdd()
-		printHelpBin()
-		printHelpScr()
-		printHelpServer()
-		printHelpClean()
-		printHelpVar()
-		printHelpCompress()
-	}
+	out,_ := json.MarshalIndent(rmc,"","\t")
+	_,err = fi.Write(out)
+	return err
 }
 
 func main() {
@@ -330,7 +253,7 @@ func main() {
 		for _,v := range os.Args[2:] {
 			fi := new(FileInfo)
 			fi.Path = v
-			fi.LastTime = time.Now().AddDate(-10,0,0)
+			fi.LastTime = time.Now().AddDate(-20,0,0)
 			fmt.Printf("Adding: '%s'\n", v)
 			rmc.Files = append(rmc.Files, fi)
 		}
@@ -343,10 +266,7 @@ func main() {
 	case "bin":
 		rmc.Output = os.Args[2]
 	case "clean":
-		for _,v := range rmc.Files {
-			v.LastTime = time.Now().AddDate(-20,0,0)
-		}
-		rmc.Session = ""
+		rmc.Clean()
 	case "var":
 		rmc.Vars[os.Args[2]] = os.Args[3]
 	case "compress":
