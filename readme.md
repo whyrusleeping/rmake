@@ -49,7 +49,17 @@ Another feature rmake provides is the ability to specify environment variables f
 	rmake var CXX clang++
 
 ##Installation
-Installation is pretty simple with go get. First, make sure you have go installed and your gopath configured. Then, simply:
+Installation is pretty simple with go get. First, make sure you have go installed via your package manager, or built from source, and your gopath configured.
+
+To configure your gopath, add the following to your .bashrc:
+
+	export GOPATH=$HOME/gopkg
+
+or your fish config:
+
+	set -x GOPATH $HOME/gopkg
+
+Then, simply:
 
 	go get github.com/whyrusleeping/rmake/rmake
 	go get github.com/whyrusleeping/rmake/rmakeserver
