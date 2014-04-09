@@ -68,6 +68,7 @@ func (f *File) Save(builddir string) error {
 
 //Create file struct from file at the given path
 func LoadFile(path string) *File {
+	//Stat the file to get mode
 	inf,err := os.Stat(path)
 	if err != nil {
 		fmt.Println(err)
@@ -77,6 +78,7 @@ func LoadFile(path string) *File {
 	f.Path = path
 	f.Mode = inf.Mode()
 
+	//Read entire file into buffer
 	cnts,err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println(err)
@@ -88,11 +90,21 @@ func LoadFile(path string) *File {
 
 //A package is what is sent by the client to request a build
 type Package struct {
+	//Files needed for this build
 	Files []*File
+
+	//Command to run and its args
+	//eg: Command = "gcc" args = ["-c" "-o" "thing.o"]
 	Command string
 	Args []string
+
+	//Build session ID
 	Session string
+
+	//Name of the output binary
 	Output string
+
+	//Environment variables
 	Vars map[string]string
 }
 
@@ -192,6 +204,7 @@ func HandleConnection(c net.Conn) {
 	return
 }
 
+//Get a random string for a dir name
 func RandDir() string {
 	buf := new(bytes.Buffer)
 	io.CopyN(buf, rand.Reader, 16)
@@ -221,6 +234,7 @@ func main() {
 			fmt.Println(err)
 			continue
 		}
+		//Handle clients in separate 'thread'
 		go HandleConnection(con)
 	}
 }

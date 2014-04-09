@@ -20,9 +20,11 @@ import (
 type Response struct {
 	Stdout string
 	Error string
-	Binary *File
-	Success bool
 	Session string
+	Success bool
+
+	//The output file that was built
+	Binary *File
 }
 
 //A build package, gets sent to the server to start a build
@@ -32,6 +34,9 @@ type Package struct {
 	Args []string
 	Output string
 	Session string
+
+	//Environment Variables to be set on each build
+	//eg, CFLAGS, CC, etc
 	Vars map[string]string
 }
 
@@ -78,6 +83,8 @@ func NewRMakeConf() *RMakeConf {
 	return rmc
 }
 
+//Load list of files to ignore
+//Not really used yet
 func (rmc *RMakeConf) LoadIgnores(igfile string) {
 	fi,err := os.Open(igfile)
 	if err != nil {
@@ -179,11 +186,15 @@ func (rmc *RMakeConf) DoBuild() error {
 	zipp.Close()
 
 	resp := new(Response)
+
+	//Wrap the socket in a gob unzipper
 	unzip,err := gzip.NewReader(con)
 	if err != nil {
 		return err
 	}
 	dec := gob.NewDecoder(unzip)
+
+	//Read (gob-unzip) the response from the server
 	err = dec.Decode(resp)
 	if err != nil {
 		fmt.Println(err)
@@ -198,6 +209,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		return nil
 	}
 	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
+	//Save whatever session the server used
 	rmc.Session = resp.Session
 	err = resp.Binary.Save()
 	if err != nil {
