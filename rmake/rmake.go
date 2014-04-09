@@ -15,6 +15,8 @@ import (
 	"compress/gzip"
 )
 
+//A response that is sent back from the server
+//contains the result of a build
 type Response struct {
 	Stdout string
 	Error string
@@ -23,6 +25,7 @@ type Response struct {
 	Session string
 }
 
+//A build package, gets sent to the server to start a build
 type Package struct {
 	Files []*File
 	Command string
@@ -47,11 +50,13 @@ func NewPackage(conf *RMakeConf) *Package {
 	return p
 }
 
+
 type FileInfo struct {
 	Path string
 	LastTime time.Time
 }
 
+//The in memory representation of the configuration file
 type RMakeConf struct {
 	Server string
 	Files []*FileInfo
@@ -64,6 +69,7 @@ type RMakeConf struct {
 	ignore []string
 }
 
+//Create a new empty configuration
 func NewRMakeConf() *RMakeConf {
 	rmc := new(RMakeConf)
 	rmc.Vars = make(map[string]string)
@@ -92,6 +98,7 @@ func (rmc *RMakeConf) IsIgnored(fi string) bool {
 	return false
 }
 
+//Print a pretty status message
 func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Current working tree status\x1b[0m")
 	fmt.Println("\x1b[0m#   (use \"rmake remove <file>...\" to no longer track the file)\x1b[0m")
@@ -148,6 +155,7 @@ func (rmc *RMakeConf) Status() error {
 }
 
 func (rmc *RMakeConf) DoBuild() error {
+	//Create a package 
 	pack := NewPackage(rmc)
 	con,err := net.Dial("tcp", rmc.Server)
 	if err != nil {

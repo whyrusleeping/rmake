@@ -34,29 +34,39 @@ type Response struct {
 	Session string
 }
 
+//A structure representing a file on disk
 type File struct {
+	//Relative path from project root
 	Path string
+
 	Contents []byte
 	Mode os.FileMode
 }
 
+//Write file to disk, relative to builddir with proper permissions
 func (f *File) Save(builddir string) error {
 	cur := builddir
 	spl := strings.Split(f.Path,"/")
+
+	//"mkdir -p"
 	for _,v := range spl[:len(spl)-1] {
 		cur += "/" + v
 		os.Mkdir(cur, os.ModeDir | 0777)
 	}
-	fi,err := os.OpenFile(builddir + "/" + f.Path, os.O_CREATE | os.O_WRONLY, f.Mode)
+
+	fi,err := os.OpenFile(builddir + "/" + f.Path,
+					os.O_CREATE | os.O_WRONLY, f.Mode)
 	if err != nil {
 		fmt.Println("File creation failed.")
 		return err
 	}
+
 	fi.Write(f.Contents)
 	fi.Close()
 	return nil
 }
 
+//Create file struct from file at the given path
 func LoadFile(path string) *File {
 	inf,err := os.Stat(path)
 	if err != nil {
@@ -66,6 +76,7 @@ func LoadFile(path string) *File {
 	f := new(File)
 	f.Path = path
 	f.Mode = inf.Mode()
+
 	cnts,err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println(err)
@@ -75,6 +86,7 @@ func LoadFile(path string) *File {
 	return f
 }
 
+//A package is what is sent by the client to request a build
 type Package struct {
 	Files []*File
 	Command string
@@ -84,6 +96,8 @@ type Package struct {
 	Vars map[string]string
 }
 
+//Build the command object for this package
+//This is the script that will be run
 func (p *Package) MakeCmd(dir string) *exec.Cmd {
 	proc := exec.Command(p.Command, p.Args...)
 	proc.Dir = dir
@@ -93,6 +107,8 @@ func (p *Package) MakeCmd(dir string) *exec.Cmd {
 	return proc
 }
 
+//Deserialize package object from the given socket
+//connection
 func ReadPackage(c net.Conn) (*Package, error) {
 	pack := new(Package)
 	unzip,err := gzip.NewReader(c)
@@ -107,6 +123,7 @@ func ReadPackage(c net.Conn) (*Package, error) {
 	return pack, nil
 }
 
+//Handle a new client connection
 func HandleConnection(c net.Conn) {
 	pack,err := ReadPackage(c)
 	if err != nil {
@@ -153,6 +170,8 @@ func HandleConnection(c net.Conn) {
 	for _,f := range pack.Files {
 		f.Save(dir)
 	}
+
+	//Build and run the script to be executed
 	proc := pack.MakeCmd(dir)
 	b,err := proc.CombinedOutput()
 	resp.Stdout = string(b)
@@ -162,6 +181,8 @@ func HandleConnection(c net.Conn) {
 		resp.Success = false
 		return
 	}
+
+	//Read in final binary to be sent back
 	fmt.Println("Loading output.")
 	bin := LoadFile(dir + "/" + pack.Output)
 	fmt.Printf("Binary size: %d\n", len(bin.Contents))
@@ -178,16 +199,22 @@ func RandDir() string {
 }
 
 func main() {
+	//Listen on port 11221
 	listname := ":11221"
 	if len(os.Args) == 2 {
 		listname = os.Args[1]
 	}
+
+	//Make our build directory
 	os.Mkdir("build", os.ModeDir | 0777)
+
+	//Start the server socket
 	list,err := net.Listen("tcp",listname)
 	if err != nil {
 		panic(err)
 	}
 
+	//Accept and handle new client connections
 	for {
 		con,err := list.Accept()
 		if err != nil {
