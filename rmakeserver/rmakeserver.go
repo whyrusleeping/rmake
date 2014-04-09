@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"encoding/hex"
 	"fmt"
+	"flag"
 	"net"
 	"strings"
 	"io"
@@ -198,12 +199,15 @@ func RandDir() string {
 	return hex.EncodeToString(buf.Bytes())
 }
 
+
 func main() {
-	//Listen on port 11221
-	listname := ":11221"
-	if len(os.Args) == 2 {
-		listname = os.Args[1]
-	}
+	//Listens on port 11221 by default
+	var listname string
+	// Arguement parsing
+	flag.StringVar(&listname, "listname", ":11221", "The ip and or port to listen on")
+	flag.StringVar(&listname, "l", ":11221", "The ip and or port to listen on (shorthand)")
+
+	flag.Parse();
 
 	//Make our build directory
 	os.Mkdir("build", os.ModeDir | 0777)
