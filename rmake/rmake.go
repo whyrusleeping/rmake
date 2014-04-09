@@ -35,6 +35,7 @@ type Package struct {
 	Vars map[string]string
 }
 
+//Create a new build package based on the configuration file
 func NewPackage(conf *RMakeConf) *Package {
 	p := new(Package)
 	p.Output = conf.Output
@@ -51,6 +52,7 @@ func NewPackage(conf *RMakeConf) *Package {
 }
 
 
+//The information the config file keeps about files in the project
 type FileInfo struct {
 	Path string
 	LastTime time.Time
@@ -87,6 +89,8 @@ func (rmc *RMakeConf) LoadIgnores(igfile string) {
 	}
 }
 
+//Reset all file modtimes to be in the past
+//and reset the session ID
 func (rmc *RMakeConf) Clean() {
 	for _,v := range rmc.Files {
 		v.LastTime = time.Now().AddDate(-20,0,0)
@@ -94,6 +98,8 @@ func (rmc *RMakeConf) Clean() {
 	rmc.Session = ""
 }
 
+//TODO: as part of the 'rmakeignore' file, check whether or not
+//a given file is ignored
 func (rmc *RMakeConf) IsIgnored(fi string) bool {
 	return false
 }
@@ -154,6 +160,7 @@ func (rmc *RMakeConf) Status() error {
 	return nil
 }
 
+//Perform a build as specified by the rmake config file
 func (rmc *RMakeConf) DoBuild() error {
 	//Create a package 
 	pack := NewPackage(rmc)
@@ -202,6 +209,8 @@ func (rmc *RMakeConf) DoBuild() error {
 	return nil
 }
 
+//Wrap the given writer in a gzip layer
+//level of compression specified in config
 func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	complev := gzip.DefaultCompression
 	switch rmc.Compression {
@@ -246,10 +255,14 @@ func (rmc *RMakeConf) Save(file string) error {
 }
 
 func main() {
+	//Try and load default configuration
 	rmc,err := LoadRMakeConf("rmake.json")
 	if err != nil {
 		rmc = NewRMakeConf()
 	}
+
+	//If no args, perform a build
+	//eg, user ran "rmake"
 	if len(os.Args) == 1 {
 		err := rmc.DoBuild()
 		if err != nil {
@@ -258,6 +271,8 @@ func main() {
 		rmc.Save("rmake.json")
 		return
 	}
+
+	//Parse command line arguments
 	switch os.Args[1] {
 	case "add":
 		for _,v := range os.Args[2:] {
