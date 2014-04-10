@@ -1,47 +1,62 @@
 package main
 
 import (
-	"os"
-	"fmt"
-	"path/filepath"
-	"net"
-	"time"
-	"strings"
-	"io"
 	"bufio"
-	"encoding/gob"
-	"github.com/dustin/go-humanize"
-	"encoding/json"
 	"compress/gzip"
+	"encoding/gob"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/dustin/go-humanize"
+)
+
+// The types of packages
+const (
+	RequestPackage = iota
+	BuilderConnection
+	BuilderDisconnection
 )
 
 //A response that is sent back from the server
 //contains the result of a build
 type Response struct {
-	Stdout string
-	Error string
-	Binary *File
+	Type    int
+	Stdout  string
+	Error   string
+	Binary  *File
 	Success bool
 	Session string
 }
 
-//A build package, gets sent to the server to start a build
 type Package struct {
-	Files []*File
-	Command string
-	Args []string
-	Output string
-	Session string
-	Vars map[string]string
+	Type int
 }
 
-func NewPackage(conf *RMakeConf) *Package {
-	p := new(Package)
+//A build package, gets sent to the server to start a build
+type Request struct {
+	Type    int
+	Files   []*File
+	Command string
+	Args    []string
+	Output  string
+	Session string
+	Vars    map[string]string
+}
+
+func NewRequest(conf *RMakeConf) *Request {
+	p := new(Request)
+	p.Type = RequestPackage
 	p.Output = conf.Output
 	p.Command = conf.Command
 	p.Args = conf.Args
 	p.Session = conf.Session
-	for _,v := range conf.Files {
+	for _, v := range conf.Files {
 		f := v.LoadFile()
 		if f != nil {
 			p.Files = append(p.Files, f)
@@ -50,23 +65,22 @@ func NewPackage(conf *RMakeConf) *Package {
 	return p
 }
 
-
 type FileInfo struct {
-	Path string
+	Path     string
 	LastTime time.Time
 }
 
 //The in memory representation of the configuration file
 type RMakeConf struct {
-	Server string
-	Files []*FileInfo
-	Command string
-	Args []string
-	Output string
-	Session string
-	Vars map[string]string
+	Server      string
+	Files       []*FileInfo
+	Command     string
+	Args        []string
+	Output      string
+	Session     string
+	Vars        map[string]string
 	Compression string
-	ignore []string
+	ignore      []string
 }
 
 //Create a new empty configuration
@@ -77,7 +91,7 @@ func NewRMakeConf() *RMakeConf {
 }
 
 func (rmc *RMakeConf) LoadIgnores(igfile string) {
-	fi,err := os.Open(igfile)
+	fi, err := os.Open(igfile)
 	if err != nil {
 		return
 	}
@@ -88,8 +102,8 @@ func (rmc *RMakeConf) LoadIgnores(igfile string) {
 }
 
 func (rmc *RMakeConf) Clean() {
-	for _,v := range rmc.Files {
-		v.LastTime = time.Now().AddDate(-20,0,0)
+	for _, v := range rmc.Files {
+		v.LastTime = time.Now().AddDate(-20, 0, 0)
 	}
 	rmc.Session = ""
 }
@@ -106,8 +120,8 @@ func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Modified files to be updated\x1b[0m")
 	fmt.Println("#")
 
-	for _,v := range rmc.Files {
-		inf,err := os.Stat(v.Path)
+	for _, v := range rmc.Files {
+		inf, err := os.Stat(v.Path)
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -121,8 +135,8 @@ func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Non modified files\x1b[0m")
 	fmt.Println("#")
 
-	for _,v := range rmc.Files {
-		inf,err := os.Stat(v.Path)
+	for _, v := range rmc.Files {
+		inf, err := os.Stat(v.Path)
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -141,13 +155,13 @@ func (rmc *RMakeConf) Status() error {
 			return nil
 		}
 
-		for _,v := range rmc.Files {
+		for _, v := range rmc.Files {
 			if path == v.Path {
 				return nil
 			}
 		}
 
-		fmt.Printf("#       %s\n", path);
+		fmt.Printf("#       %s\n", path)
 		return nil
 	})
 
@@ -155,9 +169,9 @@ func (rmc *RMakeConf) Status() error {
 }
 
 func (rmc *RMakeConf) DoBuild() error {
-	//Create a package 
-	pack := NewPackage(rmc)
-	con,err := net.Dial("tcp", rmc.Server)
+	//Create a package
+	pack := NewRequest(rmc)
+	con, err := net.Dial("tcp", rmc.Server)
 	if err != nil {
 		return err
 	}
@@ -172,7 +186,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	zipp.Close()
 
 	resp := new(Response)
-	unzip,err := gzip.NewReader(con)
+	unzip, err := gzip.NewReader(con)
 	if err != nil {
 		return err
 	}
@@ -212,15 +226,15 @@ func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	case "speed":
 		complev = gzip.BestSpeed
 	}
-	zipper,err := gzip.NewWriterLevel(w, complev)
+	zipper, err := gzip.NewWriterLevel(w, complev)
 	if err != nil {
 		panic(err)
 	}
 	return zipper
 }
 
-func LoadRMakeConf(file string) (*RMakeConf,error) {
-	fi,err := os.Open(file)
+func LoadRMakeConf(file string) (*RMakeConf, error) {
+	fi, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
@@ -231,22 +245,22 @@ func LoadRMakeConf(file string) (*RMakeConf,error) {
 		return nil, err
 	}
 	rmc.LoadIgnores(".rmakeignore")
-	return rmc,nil
+	return rmc, nil
 }
 
 func (rmc *RMakeConf) Save(file string) error {
-	fi,err := os.Create(file)
+	fi, err := os.Create(file)
 	if err != nil {
 		return err
 	}
 	defer fi.Close()
-	out,_ := json.MarshalIndent(rmc,"","\t")
-	_,err = fi.Write(out)
+	out, _ := json.MarshalIndent(rmc, "", "\t")
+	_, err = fi.Write(out)
 	return err
 }
 
 func main() {
-	rmc,err := LoadRMakeConf("rmake.json")
+	rmc, err := LoadRMakeConf("rmake.json")
 	if err != nil {
 		rmc = NewRMakeConf()
 	}
@@ -260,10 +274,10 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "add":
-		for _,v := range os.Args[2:] {
+		for _, v := range os.Args[2:] {
 			fi := new(FileInfo)
 			fi.Path = v
-			fi.LastTime = time.Now().AddDate(-20,0,0)
+			fi.LastTime = time.Now().AddDate(-20, 0, 0)
 			fmt.Printf("Adding: '%s'\n", v)
 			rmc.Files = append(rmc.Files, fi)
 		}
