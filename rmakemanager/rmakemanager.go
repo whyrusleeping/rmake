@@ -1,6 +1,8 @@
 package main
 
 import (
+	"compress/gzip"
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"net"
@@ -10,16 +12,35 @@ import (
 // Determines what resources are avaliable and what
 // resources the request requires.
 func HandleConnection(c net.Conn) {
+	var gobint interface{}
 
-	/*
-		pack, err := ReadPackage(c)
-		if err != nil {
-			fmt.Println(err)
-			c.Close()
-			return
-		}*/
+	unzip, err := gzip.NewReader(c)
+	if err != nil {
+		return
+	}
+
+	dec := gob.NewDecoder(unzip)
+	err = dec.Decode(&gobint)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	switch gobtype := gobint.(type) {
+	case BuilderResult:
+		fmt.Printf("Builder Result: %d\n", gobtype)
+	case ManagerRequest:
+		fmt.Printf("Manager Request: %d\n", gobtype)
+	default:
+		fmt.Printf("Unknown Type: %d\n", gobtype)
+	}
 
 	return
+}
+
+func init() {
+	gob.Register(BuilderResult{})
+	gob.Register(ManagerRequest{})
 }
 
 // main

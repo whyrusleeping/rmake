@@ -31,11 +31,6 @@ func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
 	return p
 }
 
-type FileInfo struct {
-	Path     string
-	LastTime time.Time
-}
-
 //The in memory representation of the configuration file
 type RMakeConf struct {
 	Server      string
@@ -136,7 +131,9 @@ func (rmc *RMakeConf) Status() error {
 
 func (rmc *RMakeConf) DoBuild() error {
 	//Create a package
-	pack := NewManagerRequest(rmc)
+	var inter interface{}
+	inter = NewManagerRequest(rmc)
+
 	con, err := net.Dial("tcp", rmc.Server)
 	if err != nil {
 		return err
@@ -144,7 +141,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	defer con.Close()
 	zipp := rmc.Gzipper(con)
 	enc := gob.NewEncoder(zipp)
-	err = enc.Encode(pack)
+	err = enc.Encode(&inter)
 	if err != nil {
 		return err
 	}
@@ -223,6 +220,11 @@ func (rmc *RMakeConf) Save(file string) error {
 	out, _ := json.MarshalIndent(rmc, "", "\t")
 	_, err = fi.Write(out)
 	return err
+}
+
+func init() {
+	gob.Register(BuilderResult{})
+	gob.Register(ManagerRequest{})
 }
 
 func main() {
