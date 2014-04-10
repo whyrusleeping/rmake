@@ -16,42 +16,8 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-// The types of packages
-const (
-	RequestPackage = iota
-	BuilderConnection
-	BuilderDisconnection
-)
-
-//A response that is sent back from the server
-//contains the result of a build
-type Response struct {
-	Type    int
-	Stdout  string
-	Error   string
-	Binary  *File
-	Success bool
-	Session string
-}
-
-type Package struct {
-	Type int
-}
-
-//A build package, gets sent to the server to start a build
-type Request struct {
-	Type    int
-	Files   []*File
-	Command string
-	Args    []string
-	Output  string
-	Session string
-	Vars    map[string]string
-}
-
-func NewRequest(conf *RMakeConf) *Request {
-	p := new(Request)
-	p.Type = RequestPackage
+func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
+	p := new(ManagerRequest)
 	p.Output = conf.Output
 	p.Command = conf.Command
 	p.Args = conf.Args
@@ -170,7 +136,7 @@ func (rmc *RMakeConf) Status() error {
 
 func (rmc *RMakeConf) DoBuild() error {
 	//Create a package
-	pack := NewRequest(rmc)
+	pack := NewManagerRequest(rmc)
 	con, err := net.Dial("tcp", rmc.Server)
 	if err != nil {
 		return err
@@ -185,7 +151,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	//Make sure all data gets flushed through
 	zipp.Close()
 
-	resp := new(Response)
+	resp := new(BuilderResult)
 	unzip, err := gzip.NewReader(con)
 	if err != nil {
 		return err
