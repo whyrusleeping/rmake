@@ -28,11 +28,11 @@ func HandleConnection(c net.Conn) {
 
 	switch gobtype := gobint.(type) {
 	case BuilderResult:
-		fmt.Printf("Builder Result: %d\n", gobtype)
+		fmt.Printf("Builder Result.\n", gobtype)
 	case ManagerRequest:
-		fmt.Printf("Manager Request: %d\n", gobtype)
+		fmt.Printf("Manager Request.\n", gobtype)
 	default:
-		fmt.Printf("Unknown Type: %d\n", gobtype)
+		fmt.Printf("Unknown Type.\n", gobtype)
 	}
 
 	return
