@@ -18,16 +18,18 @@ import (
 
 func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
 	p := new(ManagerRequest)
-	p.Output = conf.Output
-	p.Command = conf.Command
-	p.Args = conf.Args
-	p.Session = conf.Session
-	for _, v := range conf.Files {
-		f := v.LoadFile()
-		if f != nil {
-			p.Files = append(p.Files, f)
+	/*
+		p.Output = conf.Output
+		p.Command = conf.Command
+		p.Args = conf.Args
+		p.Session = conf.Session
+		for _,v := range conf.Files {
+			f := v.LoadFile()
+			if f != nil {
+				p.Files = append(p.Files, f)
+			}
 		}
-	}
+	*/
 	return p
 }
 
@@ -51,6 +53,8 @@ func NewRMakeConf() *RMakeConf {
 	return rmc
 }
 
+//Load list of files to ignore
+//Not really used yet
 func (rmc *RMakeConf) LoadIgnores(igfile string) {
 	fi, err := os.Open(igfile)
 	if err != nil {
@@ -62,6 +66,8 @@ func (rmc *RMakeConf) LoadIgnores(igfile string) {
 	}
 }
 
+//Reset all file modtimes to be in the past
+//and reset the session ID
 func (rmc *RMakeConf) Clean() {
 	for _, v := range rmc.Files {
 		v.LastTime = time.Now().AddDate(-20, 0, 0)
@@ -69,6 +75,8 @@ func (rmc *RMakeConf) Clean() {
 	rmc.Session = ""
 }
 
+//TODO: as part of the 'rmakeignore' file, check whether or not
+//a given file is ignored
 func (rmc *RMakeConf) IsIgnored(fi string) bool {
 	return false
 }
@@ -129,6 +137,7 @@ func (rmc *RMakeConf) Status() error {
 	return nil
 }
 
+//Perform a build as specified by the rmake config file
 func (rmc *RMakeConf) DoBuild() error {
 	//Create a package
 	var inter interface{}
@@ -167,15 +176,17 @@ func (rmc *RMakeConf) DoBuild() error {
 		rmc.Clean()
 		return nil
 	}
-	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
-	rmc.Session = resp.Session
-	err = resp.Binary.Save()
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	fmt.Println(resp.Stdout)
+	//fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
+	//Save whatever session the server used
+	/*
+		rmc.Session = resp.Session
+		err = resp.Binary.Save()
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Println(resp.Stdout)
+	*/
 	return nil
 }
 
@@ -228,10 +239,14 @@ func init() {
 }
 
 func main() {
+	//Try and load default configuration
 	rmc, err := LoadRMakeConf("rmake.json")
 	if err != nil {
 		rmc = NewRMakeConf()
 	}
+
+	//If no args, perform a build
+	//eg, user ran "rmake"
 	if len(os.Args) == 1 {
 		err := rmc.DoBuild()
 		if err != nil {

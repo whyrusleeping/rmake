@@ -17,9 +17,9 @@ type BuilderResult struct {
 	//
 	Results []File
 	//
-	Stdout  string
+	Stdout string
 	//
-	Error   string
+	Error string
 	//
 	Success bool
 	//
@@ -33,12 +33,12 @@ type ManagerRequest struct {
 	//
 	Arch string
 	//
-	OS   string
+	OS string
 }
 
 type ManagerResult struct {
 	//
-	Builders string[]
+	Builders []string
 	//
 	Session string
 }
