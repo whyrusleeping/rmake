@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"../types"
 )
 
 // goroutine to handle a new connection from a client.
@@ -27,9 +28,9 @@ func HandleConnection(c net.Conn) {
 	}
 
 	switch gobtype := gobint.(type) {
-	case BuilderResult:
+	case *rmake.BuilderResult:
 		fmt.Printf("Builder Result: %d\n", gobtype)
-	case ManagerRequest:
+	case *rmake.ManagerRequest:
 		fmt.Printf("Manager Request: %d\n", gobtype)
 	default:
 		fmt.Printf("Unknown Type: %d\n", gobtype)
@@ -39,8 +40,8 @@ func HandleConnection(c net.Conn) {
 }
 
 func init() {
-	gob.Register(BuilderResult{})
-	gob.Register(ManagerRequest{})
+	gob.Register(&rmake.BuilderResult{})
+	gob.Register(&rmake.ManagerRequest{})
 }
 
 // main

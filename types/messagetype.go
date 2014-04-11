@@ -1,4 +1,13 @@
-package main
+package rmake
+
+import (
+	"encoding/gob"
+)
+
+func init() {
+	gob.Register(&BuilderResult{})
+	gob.Register(&ManagerRequest{})
+}
 
 //A response that is sent back from the server
 //contains the result of a build

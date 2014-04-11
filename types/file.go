@@ -1,11 +1,11 @@
-package main
+package rmake
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"time"
 	"strings"
+	"time"
 )
 
 type FileInfo struct {
@@ -13,15 +13,12 @@ type FileInfo struct {
 	LastTime time.Time
 }
 
-//A struct holding a files data for sending between machines
 type File struct {
-	Path string
+	Path     string
 	Contents []byte
-	Mode os.FileMode
+	Mode     os.FileMode
 }
 
-//Load a file specified by a given FileInfo struct
-//returns nil if the file has not been modified since
 func (cf *FileInfo) LoadFile() *File {
 	inf, err := os.Stat(cf.Path)
 	if err != nil {
@@ -45,7 +42,6 @@ func (cf *FileInfo) LoadFile() *File {
 	return f
 }
 
-//Write file to disk locally
 func (f *File) Save() error {
 	cur := "."
 	spl := strings.Split(f.Path, "/")

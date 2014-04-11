@@ -13,6 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"encoding/json"
 	"compress/gzip"
+	"../types"
 )
 
 //A response that is sent back from the server
@@ -24,12 +25,12 @@ type Response struct {
 	Success bool
 
 	//The output file that was built
-	Binary *File
+	Binary *rmake.File
 }
 
 //A build package, gets sent to the server to start a build
 type Package struct {
-	Files []*File
+	Files []*rmake.File
 	Command string
 	Args []string
 	Output string
@@ -56,8 +57,8 @@ func NewPackage(conf *RMakeConf) *Package {
 	return p
 }
 
-func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
-	p := new(ManagerRequest)
+func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
+	p := new(rmake.ManagerRequest)
 	p.Output = conf.Output
 	p.Command = conf.Command
 	p.Args = conf.Args
@@ -75,7 +76,7 @@ func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
 //The in memory representation of the configuration file
 type RMakeConf struct {
 	Server string
-	Files []*FileInfo
+	Files []*rmake.FileInfo
 	Command string
 	Args []string
 	Output string
@@ -196,7 +197,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	//Make sure all data gets flushed through
 	zipp.Close()
 
-	resp := new(BuilderResult)
+	resp := new(rmake.BuilderResult)
 	unzip, err := gzip.NewReader(con)
 	if err != nil {
 		return err
@@ -274,8 +275,8 @@ func (rmc *RMakeConf) Save(file string) error {
 }
 
 func init() {
-	gob.Register(BuilderResult{})
-	gob.Register(ManagerRequest{})
+	gob.Register(&rmake.BuilderResult{})
+	gob.Register(&rmake.ManagerRequest{})
 }
 
 func main() {
@@ -300,7 +301,7 @@ func main() {
 	switch os.Args[1] {
 	case "add":
 		for _,v := range os.Args[2:] {
-			fi := new(FileInfo)
+			fi := new(rmake.FileInfo)
 			fi.Path = v
 			fi.LastTime = time.Now().AddDate(-20,0,0)
 			fmt.Printf("Adding: '%s'\n", v)
