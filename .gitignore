@@ -1,0 +1,8 @@
+
+# Ignore Standard Binaries
+rmake/rmake
+rmakebuilder/rmakebuilder
+rmakemanager/rmakemanager
+
+# Vim
+.*.sw*

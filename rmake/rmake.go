@@ -56,12 +56,21 @@ func NewPackage(conf *RMakeConf) *Package {
 	return p
 }
 
-
-//The information the config file keeps about files in the project
-type FileInfo struct {
-	Path string
-	LastTime time.Time
+func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
+	p := new(ManagerRequest)
+	p.Output = conf.Output
+	p.Command = conf.Command
+	p.Args = conf.Args
+	p.Session = conf.Session
+	for _, v := range conf.Files {
+		f := v.LoadFile()
+		if f != nil {
+			p.Files = append(p.Files, f)
+		}
+	}
+	return p
 }
+
 
 //The in memory representation of the configuration file
 type RMakeConf struct {
@@ -119,8 +128,8 @@ func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Modified files to be updated\x1b[0m")
 	fmt.Println("#")
 
-	for _,v := range rmc.Files {
-		inf,err := os.Stat(v.Path)
+	for _, v := range rmc.Files {
+		inf, err := os.Stat(v.Path)
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -134,8 +143,8 @@ func (rmc *RMakeConf) Status() error {
 	fmt.Println("\x1b[0m# Non modified files\x1b[0m")
 	fmt.Println("#")
 
-	for _,v := range rmc.Files {
-		inf,err := os.Stat(v.Path)
+	for _, v := range rmc.Files {
+		inf, err := os.Stat(v.Path)
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -169,26 +178,26 @@ func (rmc *RMakeConf) Status() error {
 
 //Perform a build as specified by the rmake config file
 func (rmc *RMakeConf) DoBuild() error {
-	//Create a package 
-	pack := NewPackage(rmc)
-	con,err := net.Dial("tcp", rmc.Server)
+	//Create a package
+	var inter interface{}
+	inter = NewManagerRequest(rmc)
+
+	con, err := net.Dial("tcp", rmc.Server)
 	if err != nil {
 		return err
 	}
 	defer con.Close()
 	zipp := rmc.Gzipper(con)
 	enc := gob.NewEncoder(zipp)
-	err = enc.Encode(pack)
+	err = enc.Encode(&inter)
 	if err != nil {
 		return err
 	}
 	//Make sure all data gets flushed through
 	zipp.Close()
 
-	resp := new(Response)
-
-	//Wrap the socket in a gob unzipper
-	unzip,err := gzip.NewReader(con)
+	resp := new(BuilderResult)
+	unzip, err := gzip.NewReader(con)
 	if err != nil {
 		return err
 	}
@@ -221,8 +230,6 @@ func (rmc *RMakeConf) DoBuild() error {
 	return nil
 }
 
-//Wrap the given writer in a gzip layer
-//level of compression specified in config
 func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	complev := gzip.DefaultCompression
 	switch rmc.Compression {
@@ -264,6 +271,11 @@ func (rmc *RMakeConf) Save(file string) error {
 	out,_ := json.MarshalIndent(rmc,"","\t")
 	_,err = fi.Write(out)
 	return err
+}
+
+func init() {
+	gob.Register(BuilderResult{})
+	gob.Register(ManagerRequest{})
 }
 
 func main() {
