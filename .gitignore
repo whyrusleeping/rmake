@@ -6,3 +6,6 @@ rmakemanager/rmakemanager
 
 # Vim
 .*.sw*
+
+#rmake conf file
+rmake.json
