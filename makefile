@@ -1,4 +1,5 @@
 all:
-	cd rmake && go install .
-	cd rmakebuilder && go install .
-	cd rmakemanager && go install .
+	cd types && go install
+	cd rmake && go install
+	cd rmakebuilder && go install
+	cd rmakemanager && go install
