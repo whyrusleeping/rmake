@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"../types"
+	"github.com/whyrusleeping/rmake/types"
 )
 
 // goroutine to handle a new connection from a client.

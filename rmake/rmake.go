@@ -13,7 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"encoding/json"
 	"compress/gzip"
-	"../types"
+	"github.com/whyrusleeping/rmake/types"
 )
 
 //A response that is sent back from the server
