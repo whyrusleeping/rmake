@@ -1,74 +1,36 @@
 package main
 
 import (
-	"os"
-	"fmt"
-	"path/filepath"
-	"net"
-	"time"
-	"strings"
-	"io"
 	"bufio"
-	"encoding/gob"
-	"github.com/dustin/go-humanize"
-	"encoding/json"
 	"compress/gzip"
+	"encoding/gob"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/dustin/go-humanize"
 	"github.com/whyrusleeping/rmake/types"
 )
 
-//A response that is sent back from the server
-//contains the result of a build
-type Response struct {
-	Stdout string
-	Error string
-	Session string
-	Success bool
-
-	//The output file that was built
-	Binary *rmake.File
-}
-
-//A build package, gets sent to the server to start a build
-type Package struct {
-	Files []*rmake.File
-	Command string
-	Args []string
-	Output string
-	Session string
-
-	//Environment Variables to be set on each build
-	//eg, CFLAGS, CC, etc
-	Vars map[string]string
-}
-
-//Create a new build package based on the configuration file
-func NewPackage(conf *RMakeConf) *Package {
-	p := new(Package)
-	p.Output = conf.Output
-	p.Command = conf.Command
-	p.Args = conf.Args
-	p.Session = conf.Session
-	for _,v := range conf.Files {
-		f := v.LoadFile()
-		if f != nil {
-			p.Files = append(p.Files, f)
+func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
+	p := new(ManagerRequest)
+	/*
+		p.Output = conf.Output
+		p.Command = conf.Command
+		p.Args = conf.Args
+		p.Session = conf.Session
+		for _,v := range conf.Files {
+			f := v.LoadFile()
+			if f != nil {
+				p.Files = append(p.Files, f)
+			}
 		}
-	}
-	return p
-}
-
-func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
-	p := new(rmake.ManagerRequest)
-	p.Output = conf.Output
-	p.Command = conf.Command
-	p.Args = conf.Args
-	p.Session = conf.Session
-	for _, v := range conf.Files {
-		f := v.LoadFile()
-		if f != nil {
-			p.Files = append(p.Files, f)
-		}
-	}
+	*/
 	return p
 }
 
@@ -83,7 +45,7 @@ type RMakeConf struct {
 	Session string
 	Vars map[string]string
 	Compression string
-	ignore []string
+	ignore      []string
 }
 
 //Create a new empty configuration
@@ -96,7 +58,7 @@ func NewRMakeConf() *RMakeConf {
 //Load list of files to ignore
 //Not really used yet
 func (rmc *RMakeConf) LoadIgnores(igfile string) {
-	fi,err := os.Open(igfile)
+	fi, err := os.Open(igfile)
 	if err != nil {
 		return
 	}
@@ -109,8 +71,8 @@ func (rmc *RMakeConf) LoadIgnores(igfile string) {
 //Reset all file modtimes to be in the past
 //and reset the session ID
 func (rmc *RMakeConf) Clean() {
-	for _,v := range rmc.Files {
-		v.LastTime = time.Now().AddDate(-20,0,0)
+	for _, v := range rmc.Files {
+		v.LastTime = time.Now().AddDate(-20, 0, 0)
 	}
 	rmc.Session = ""
 }
@@ -164,13 +126,13 @@ func (rmc *RMakeConf) Status() error {
 			return nil
 		}
 
-		for _,v := range rmc.Files {
+		for _, v := range rmc.Files {
 			if path == v.Path {
 				return nil
 			}
 		}
 
-		fmt.Printf("#       %s\n", path);
+		fmt.Printf("#       %s\n", path)
 		return nil
 	})
 
@@ -197,8 +159,10 @@ func (rmc *RMakeConf) DoBuild() error {
 	//Make sure all data gets flushed through
 	zipp.Close()
 
+	//Wrap the socket in a gob unzipper
 	resp := new(rmake.BuilderResult)
 	unzip, err := gzip.NewReader(con)
+
 	if err != nil {
 		return err
 	}
@@ -218,19 +182,22 @@ func (rmc *RMakeConf) DoBuild() error {
 		rmc.Clean()
 		return nil
 	}
-	fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
+	//fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
 	//Save whatever session the server used
-	rmc.Session = resp.Session
-	err = resp.Binary.Save()
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	fmt.Println(resp.Stdout)
+	/*
+		rmc.Session = resp.Session
+		err = resp.Binary.Save()
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Println(resp.Stdout)
+	*/
 	return nil
 }
 
+//Wrap the given writer in a gzip layer
+//level of compression specified in config
 func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	complev := gzip.DefaultCompression
 	switch rmc.Compression {
@@ -241,15 +208,15 @@ func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	case "speed":
 		complev = gzip.BestSpeed
 	}
-	zipper,err := gzip.NewWriterLevel(w, complev)
+	zipper, err := gzip.NewWriterLevel(w, complev)
 	if err != nil {
 		panic(err)
 	}
 	return zipper
 }
 
-func LoadRMakeConf(file string) (*RMakeConf,error) {
-	fi,err := os.Open(file)
+func LoadRMakeConf(file string) (*RMakeConf, error) {
+	fi, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
@@ -260,24 +227,20 @@ func LoadRMakeConf(file string) (*RMakeConf,error) {
 		return nil, err
 	}
 	rmc.LoadIgnores(".rmakeignore")
-	return rmc,nil
+	return rmc, nil
 }
 
 func (rmc *RMakeConf) Save(file string) error {
-	fi,err := os.Create(file)
+	fi, err := os.Create(file)
 	if err != nil {
 		return err
 	}
 	defer fi.Close()
-	out,_ := json.MarshalIndent(rmc,"","\t")
-	_,err = fi.Write(out)
+	out, _ := json.MarshalIndent(rmc, "", "\t")
+	_, err = fi.Write(out)
 	return err
 }
 
-func init() {
-	gob.Register(&rmake.BuilderResult{})
-	gob.Register(&rmake.ManagerRequest{})
-}
 
 func main() {
 	//Try and load default configuration

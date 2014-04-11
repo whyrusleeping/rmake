@@ -1,13 +1,4 @@
-package rmake
-
-import (
-	"encoding/gob"
-)
-
-func init() {
-	gob.Register(&BuilderResult{})
-	gob.Register(&ManagerRequest{})
-}
+package main
 
 type BuilderRequest struct {
 	//

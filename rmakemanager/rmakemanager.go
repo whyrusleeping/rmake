@@ -33,15 +33,10 @@ func HandleConnection(c net.Conn) {
 	case *rmake.ManagerRequest:
 		fmt.Printf("Manager Request: %d\n", gobtype)
 	default:
-		fmt.Printf("Unknown Type: %d\n", gobtype)
+		fmt.Printf("Unknown Type.\n", gobtype)
 	}
 
 	return
-}
-
-func init() {
-	gob.Register(&rmake.BuilderResult{})
-	gob.Register(&rmake.ManagerRequest{})
 }
 
 // main
