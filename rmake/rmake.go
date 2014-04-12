@@ -17,8 +17,8 @@ import (
 	"github.com/whyrusleeping/rmake/types"
 )
 
-func NewManagerRequest(conf *RMakeConf) *ManagerRequest {
-	p := new(ManagerRequest)
+func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
+	p := new(rmake.ManagerRequest)
 	/*
 		p.Output = conf.Output
 		p.Command = conf.Command
