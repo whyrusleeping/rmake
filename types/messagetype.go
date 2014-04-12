@@ -43,7 +43,6 @@ type BuilderResult struct {
 //Client -> Manager
 type ManagerRequest struct {
 	//
-	Jobs int
 	Jobs []*Job
 	//
 	Arch string
