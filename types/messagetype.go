@@ -1,14 +1,16 @@
 package rmake
 
 import (
+	"time"
 	"encoding/gob"
 )
 
 func init() {
+	gob.Register(&BuilderRequest{})
 	gob.Register(&BuilderResult{})
 	gob.Register(&ManagerRequest{})
-	gob.Register(&ManagerResult{})
-	gob.Register(&BuilderRequest{})
+	gob.Register(&FinalBuildResult{})
+	gob.Register(&RequiredFileMessage{})
 }
 
 //Manager -> Builder
@@ -25,7 +27,8 @@ type BuilderRequest struct {
 
 //A response that is sent back from the server
 //contains the result of a build
-//Builder -> ????
+//Builder -> Builder
+//Builder -> Manager
 type BuilderResult struct {
 	//
 	Results []*File
@@ -48,14 +51,17 @@ type ManagerRequest struct {
 	Arch string
 	//
 	OS string
+
+	//Files to be transferred
+	Files []*File
 }
 
+//The final message sent back from the manager after the build is done
 //Manager -> Client
-type ManagerResult struct {
-	//
-	Builders []string
-	//
+type FinalBuildResult struct {
 	Session string
+	Results []*File
+	BuildTime time.Time
 }
 
 //Used for sending files to different builder nodes
@@ -63,6 +69,7 @@ type ManagerResult struct {
 //or sending object files from builders to the linker node
 //Manager -> Builder
 //Bulider -> Builder
+//TODO: name this better
 type RequiredFileMessage struct {
 	Payload *File
 	Session string

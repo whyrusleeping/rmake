@@ -9,8 +9,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"errors"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -19,6 +19,16 @@ import (
 
 func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	p := new(rmake.ManagerRequest)
+	p.Jobs = conf.Jobs
+	p.Arch = "Arch" //lol
+	p.OS = "Arch (the OS)"
+
+	for _,v := range conf.Files {
+		f := v.LoadFile()
+		if f != nil {
+			p.Files = append(p.Files, f)
+		}
+	}
 	/*
 		p.Output = conf.Output
 		p.Command = conf.Command
@@ -38,14 +48,32 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 //The in memory representation of the configuration file
 type RMakeConf struct {
 	Server string
-	Files []*rmake.FileInfo
-	Command string
-	Args []string
+	Files []*rmake.FileInfo `json:",omitempty"`
+	Jobs []*rmake.Job `json:",omitempty"`
 	Output string
 	Session string
 	Vars map[string]string
 	Compression string
-	ignore      []string
+	ignore      []string `json:",omitempty"`
+}
+
+//Check to make sure that all the files required by all the jobs are added
+func (rmc *RMakeConf) Validate() error {
+	for _,j := range rmc.Jobs {
+		for _,dep := range j.Deps {
+			found := false
+			for _,f := range rmc.Files {
+				if f.Path == dep {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return errors.New(fmt.Sprintf("'%s' not found!", dep))
+			}
+		}
+	}
+	return nil
 }
 
 //Create a new empty configuration
@@ -272,16 +300,19 @@ func main() {
 		}
 	case "server":
 		rmc.Server = os.Args[2]
-	case "scr":
-		toks := strings.Split(os.Args[2], " ")
-		rmc.Command = toks[0]
-		rmc.Args = toks[1:]
 	case "bin":
 		rmc.Output = os.Args[2]
 	case "clean":
 		rmc.Clean()
 	case "var":
 		rmc.Vars[os.Args[2]] = os.Args[3]
+	case "check":
+		err := rmc.Validate()
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println("All is well!")
+		}
 	case "compress":
 		if len(os.Args) == 2 {
 			printHelpCompress()
