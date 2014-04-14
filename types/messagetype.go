@@ -15,11 +15,10 @@ func init() {
 
 //Manager -> Builder
 type BuilderRequest struct {
-	//
-	Input []*File
-	//
-	Command string
-	//
+	BuildJob *Job
+
+	//The address of the node to send the output to
+	//empty string means keep it local
 	ResultAddress string
 	//
 	Session string
@@ -60,6 +59,10 @@ type ManagerRequest struct {
 //Manager -> Client
 type FinalBuildResult struct {
 	Session string
+
+	Success bool
+	Error string
+	Stdout string
 	Results []*File
 	BuildTime time.Time
 }
@@ -73,4 +76,10 @@ type FinalBuildResult struct {
 type RequiredFileMessage struct {
 	Payload *File
 	Session string
+}
+
+type BuilderInfoMessage struct {
+	QueuedJobs int
+	CPULoad float32
+	MemUse float32
 }
