@@ -85,6 +85,8 @@ type RequiredFileMessage struct {
 	Session string
 }
 
+//Sent periodically to the manager to inform it of the builders status
+//Builder -> Manager
 type BuilderInfoMessage struct {
 	QueuedJobs int
 	CPULoad float32

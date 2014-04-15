@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"encoding/gob"
+	"path"
 	"fmt"
 	"os/exec"
 	"time"
@@ -17,6 +18,8 @@ type Builder struct {
 
 	UpdateFrequency time.Duration
 	Running bool
+
+	mgrReconnect chan struct{}
 
 	//Job Queue
 	JQueue []*rmake.Job
@@ -39,13 +42,15 @@ func NewBuilder(host string, manager string) *Builder {
 	b.manager = mgr
 	b.mgrEnc = gob.NewEncoder(mgr)
 	b.UpdateFrequency = time.Second * 15
+	b.mgrReconnect = make(chan struct{})
 
 	return b
 }
 
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
+	sdir := path.Join("builds", req.Session)
 	for _,f := range req.Input {
-		err := f.Save()
+		err := f.Save(sdir)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -54,7 +59,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	resp := new(rmake.BuildFinishedMessage)
 	cmd := exec.Command(req.BuildJob.Command, req.BuildJob.Args...)
-	cmd.Dir = "builds/" + req.Session
+	cmd.Dir = sdir
 
 	out,err := cmd.CombinedOutput()
 	resp.Stdout = string(out)
@@ -82,21 +87,20 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		send, err := net.Dial("tcp", req.ResultAddress)
 		if err != nil {
 			fmt.Println(err)
+			//TODO: decide what to do if this happens
 			fmt.Println("ERROR: this is pretty bad... what do?")
 		}
 		outEnc = gob.NewEncoder(send)
 	}
 
-	results := new(rmake.BuilderResult)
-	outputFileInfo := new(rmake.FileInfo)
-
-	outputFileInfo.Path = "builds/" + req.Session + "/" + req.BuildJob.Output
-	fmt.Printf("Loading %s to send on.\n", outputFileInfo.Path)
-	fi := outputFileInfo.LoadFile()
+	fipath := path.Join("builds", req.Session, req.BuildJob.Output)
+	fmt.Printf("Loading %s to send on.\n", fipath)
+	fi := rmake.LoadFile(fipath)
 	if fi == nil {
 		fmt.Println("Failed to load output file!")
 	}
 
+	results := new(rmake.BuilderResult)
 	results.Results = append(results.Results, fi)
 	results.Session = req.Session
 
@@ -111,6 +115,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 func (b *Builder) Stop() {
 	fmt.Println("Shutting down builder.")
+	b.Running = false
 	b.list.Close()
 	b.manager.Close()
 }
@@ -123,7 +128,14 @@ func (b *Builder) Start() {
 		con,err := b.list.Accept()
 		if err != nil {
 			fmt.Println(err)
-			return
+			if b.Running {
+				//Diagnose?
+				fmt.Printf("Listener Error: %s\n", err)
+				continue
+			} else {
+				fmt.Println("Shutting down server socket...")
+				return
+			}
 		}
 		go b.HandleConnection(con)
 	}
@@ -146,7 +158,7 @@ func (b *Builder) HandleConnection(con net.Conn) {
 		switch mes := i.(type) {
 		case *rmake.RequiredFileMessage:
 			//Get a file from another node
-			mes.Payload.Save()
+			mes.Payload.Save(path.Join("builds", mes.Session))
 		case *rmake.BuilderRequest:
 			fmt.Println("Got a builder request!")
 			b.RunJob(mes)

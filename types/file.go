@@ -19,21 +19,23 @@ type File struct {
 	Mode     os.FileMode
 }
 
-func (cf *FileInfo) LoadFile() *File {
-	inf, err := os.Stat(cf.Path)
+func LoadFile(path string) *File {
+	inf, err := os.Stat(path)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
+	/*
 	if !inf.ModTime().After(cf.LastTime) {
 		return nil
 	}
-	fmt.Printf("Sending '%s'\n", cf.Path)
+	*/
+	fmt.Printf("Sending '%s'\n", path)
 	f := new(File)
-	f.Path = cf.Path
+	f.Path = path
 	f.Mode = inf.Mode()
-	cf.LastTime = time.Now()
-	cnts, err := ioutil.ReadFile(cf.Path)
+	//LastTime = time.Now()
+	cnts, err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -42,7 +44,7 @@ func (cf *FileInfo) LoadFile() *File {
 	return f
 }
 
-func (f *File) Save() error {
+func (f *File) Save(dir string) error {
 	cur := "."
 	spl := strings.Split(f.Path, "/")
 	for _, v := range spl[:len(spl)-1] {
