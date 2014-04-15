@@ -203,6 +203,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		return err
 	}
 
+	/*
 	if !resp.Success {
 		fmt.Println("Build failed.")
 		fmt.Println(resp.Stdout)
@@ -210,6 +211,7 @@ func (rmc *RMakeConf) DoBuild() error {
 		rmc.Clean()
 		return nil
 	}
+	*/
 	//fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
 	//Save whatever session the server used
 	/*

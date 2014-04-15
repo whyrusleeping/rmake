@@ -4,6 +4,7 @@ import (
 	"flag"
 	"encoding/gob"
 	"fmt"
+	"os/exec"
 	"time"
 	"net"
 	"github.com/whyrusleeping/rmake/types"
@@ -13,6 +14,12 @@ type Builder struct {
 	manager net.Conn
 	mgrEnc *gob.Encoder
 	list net.Listener
+
+	UpdateFrequency time.Duration
+	Running bool
+
+	//Job Queue
+	JQueue []*rmake.Job
 }
 
 func NewBuilder(host string, manager string) *Builder {
@@ -30,21 +37,100 @@ func NewBuilder(host string, manager string) *Builder {
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
+	b.mgrEnc = gob.NewEncoder(mgr)
+	b.UpdateFrequency = time.Second * 15
 
 	return b
 }
 
+func (b *Builder) RunJob(req *rmake.BuilderRequest) {
+	for _,f := range req.Input {
+		err := f.Save()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+	//TODO: Make sure all deps are here!
+
+	resp := new(rmake.BuildFinishedMessage)
+	cmd := exec.Command(req.BuildJob.Command, req.BuildJob.Args...)
+	cmd.Dir = "builds/" + req.Session
+
+	out,err := cmd.CombinedOutput()
+	resp.Stdout = string(out)
+	if err != nil {
+		fmt.Println(err)
+		resp.Error = err.Error()
+		resp.Success = false
+	}
+	err = b.SendMsgToManager(resp)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if req.ResultAddress == "" {
+		fmt.Println("Im the final node! no need to send.")
+		return
+	}
+
+	var outEnc *gob.Encoder
+	if req.ResultAddress == "manager" {
+		//SEND TO MANAGER
+		outEnc = b.mgrEnc
+	} else {
+		//Send to other builder
+		send, err := net.Dial("tcp", req.ResultAddress)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("ERROR: this is pretty bad... what do?")
+		}
+		outEnc = gob.NewEncoder(send)
+	}
+
+	results := new(rmake.BuilderResult)
+	outputFileInfo := new(rmake.FileInfo)
+
+	outputFileInfo.Path = "builds/" + req.Session + "/" + req.BuildJob.Output
+	fmt.Printf("Loading %s to send on.\n", outputFileInfo.Path)
+	fi := outputFileInfo.LoadFile()
+	if fi == nil {
+		fmt.Println("Failed to load output file!")
+	}
+
+	results.Results = append(results.Results, fi)
+	results.Session = req.Session
+
+	var i interface{}
+	i = results
+	err = outEnc.Encode(&i)
+	if err != nil {
+		fmt.Println("Sending of result to target failed.")
+	}
+	fmt.Println("Job finished!")
+}
+
+func (b *Builder) Stop() {
+	fmt.Println("Shutting down builder.")
+	b.list.Close()
+	b.manager.Close()
+}
+
 func (b *Builder) Start() {
+	b.Running = true
 	go b.StartPublisher()
 
 	for {
 		con,err := b.list.Accept()
 		if err != nil {
 			fmt.Println(err)
-			continue
+			return
 		}
 		go b.HandleConnection(con)
 	}
+}
+
+func (b *Builder) SendMsgToManager(i interface{}) error {
+	return b.mgrEnc.Encode(&i)
 }
 
 func (b *Builder) HandleConnection(con net.Conn) {
@@ -59,43 +145,59 @@ func (b *Builder) HandleConnection(con net.Conn) {
 		}
 		switch mes := i.(type) {
 		case *rmake.RequiredFileMessage:
+			//Get a file from another node
 			mes.Payload.Save()
+		case *rmake.BuilderRequest:
+			fmt.Println("Got a builder request!")
+			b.RunJob(mes)
 		}
 	}
 }
 
-func (b *Builder) SendStatusUpdate() {
+func (b *Builder) SendStatusUpdate() error {
+	//TODO: get system information
+	fmt.Println("Sending system load update!");
 	stat := new(rmake.BuilderInfoMessage)
 	stat.CPULoad = 0.04
 	stat.QueuedJobs = 7
+	stat.MemUse = 12345
 
-	err := b.mgrEnc.Encode(stat)
+	err := b.SendMsgToManager(stat)
 	if err != nil {
+		fmt.Println("Failed sending update!")
 		fmt.Println(err)
-		//TODO: think about fixing the connection?
+		return err
 	}
+	return nil
 }
 
 func (b *Builder) StartPublisher() {
-	tick := time.NewTicker(time.Second * 15)
+	tick := time.NewTicker(b.UpdateFrequency)
 	for {
 		select {
 		case <-tick.C:
-			b.SendStatusUpdate()
+			err := b.SendStatusUpdate()
+			if err != nil {
+				return
+			}
 		}
 	}
 }
 
-// main
 func main() {
 	//Listens on port 11221 by default
 	var listname string
+	var manager string
 	// Arguement parsing
-	flag.StringVar(&listname, "listname", ":11221", "The ip and or port to listen on")
-	flag.StringVar(&listname, "l", ":11221", "The ip and or port to listen on (shorthand)")
-
+	flag.StringVar(&listname, "listname", ":11221",
+					"The ip and or port to listen on")
+	flag.StringVar(&listname, "l", ":11221",
+					"The ip and or port to listen on (shorthand)")
+	flag.StringVar(&manager, "m", "", "Address and port of manager node")
 	flag.Parse()
 
 	fmt.Println("rmakebuilder\n")
 
+	b := NewBuilder(listname, manager)
+	b.Start()
 }

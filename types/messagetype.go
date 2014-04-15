@@ -11,17 +11,30 @@ func init() {
 	gob.Register(&ManagerRequest{})
 	gob.Register(&FinalBuildResult{})
 	gob.Register(&RequiredFileMessage{})
+	gob.Register(&BuilderInfoMessage{})
+	gob.Register(&BuildFinishedMessage{})
+	gob.Register(&Job{})
 }
 
 //Manager -> Builder
 type BuilderRequest struct {
 	BuildJob *Job
 
+	Input []*File
 	//The address of the node to send the output to
 	//empty string means keep it local
 	ResultAddress string
 	//
 	Session string
+}
+
+//A response from a builder who has finished a job
+//Builder -> Manager
+type BuildFinishedMessage struct {
+	//Standard out from running a job
+	Stdout string
+	Error string
+	Success bool
 }
 
 //A response that is sent back from the server
@@ -31,12 +44,6 @@ type BuilderRequest struct {
 type BuilderResult struct {
 	//
 	Results []*File
-	//
-	Stdout string
-	//
-	Error string
-	//
-	Success bool
 	//
 	Session string
 }
