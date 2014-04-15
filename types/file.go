@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -19,6 +20,7 @@ type File struct {
 	Mode     os.FileMode
 }
 
+//Load a file relative to the given directory
 func LoadFile(path string) *File {
 	inf, err := os.Stat(path)
 	if err != nil {
@@ -26,6 +28,7 @@ func LoadFile(path string) *File {
 		return nil
 	}
 	/*
+	//TODO: worry about modtimes
 	if !inf.ModTime().After(cf.LastTime) {
 		return nil
 	}
@@ -44,14 +47,17 @@ func LoadFile(path string) *File {
 	return f
 }
 
+//Make sure all needed directories are created and write file to disk
 func (f *File) Save(dir string) error {
 	cur := "."
-	spl := strings.Split(f.Path, "/")
+	complete := path.Join(dir, f.Path)
+	spl := strings.Split(complete, "/")
 	for _, v := range spl[:len(spl)-1] {
-		cur += "/" + v
+		cur = path.Join(cur, v)
 		os.Mkdir(cur, os.ModeDir|0777)
 	}
-	fi, err := os.OpenFile(f.Path, os.O_CREATE|os.O_WRONLY, f.Mode)
+	cur = path.Join(cur, spl[len(spl)-1])
+	fi, err := os.OpenFile(cur, os.O_CREATE|os.O_WRONLY, f.Mode)
 	if err != nil {
 		return err
 	}

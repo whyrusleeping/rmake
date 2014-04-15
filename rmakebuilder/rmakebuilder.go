@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"path"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 	"net"
@@ -21,7 +22,7 @@ type Builder struct {
 
 	mgrReconnect chan struct{}
 
-	//Job Queue
+	//Job Queue TODO: use this?
 	JQueue []*rmake.Job
 }
 
@@ -56,6 +57,14 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		}
 	}
 	//TODO: Make sure all deps are here!
+	//Wait in some way if they are not
+	for _,dep := range req.BuildJob.Deps {
+		depPath := path.Join(sdir, dep)
+		_,err := os.Stat(depPath)
+		if err != nil {
+			fmt.Printf("Missing dependency: '%s'\n", dep)
+		}
+	}
 
 	resp := new(rmake.BuildFinishedMessage)
 	cmd := exec.Command(req.BuildJob.Command, req.BuildJob.Args...)
@@ -80,7 +89,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	var outEnc *gob.Encoder
 	if req.ResultAddress == "manager" {
-		//SEND TO MANAGER
+		//Send to manager
 		outEnc = b.mgrEnc
 	} else {
 		//Send to other builder
@@ -104,8 +113,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	results.Results = append(results.Results, fi)
 	results.Session = req.Session
 
-	var i interface{}
-	i = results
+	i := interface{}(results)
 	err = outEnc.Encode(&i)
 	if err != nil {
 		fmt.Println("Sending of result to target failed.")
@@ -176,7 +184,6 @@ func (b *Builder) SendStatusUpdate() error {
 
 	err := b.SendMsgToManager(stat)
 	if err != nil {
-		fmt.Println("Failed sending update!")
 		fmt.Println(err)
 		return err
 	}

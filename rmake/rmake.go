@@ -24,7 +24,7 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	p.OS = "Arch (the OS)"
 
 	for _,v := range conf.Files {
-		f := v.LoadFile()
+		f := rmake.LoadFile(v.Path)
 		if f != nil {
 			p.Files = append(p.Files, f)
 		}

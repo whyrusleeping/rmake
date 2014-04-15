@@ -17,7 +17,6 @@ func TestUpdates(t *testing.T) {
 		panic(err)
 	}
 
-
 	var b *Builder
 	go func() {
 		b = NewBuilder(":12345", "localhost:12344")
@@ -76,8 +75,8 @@ func TestBuild(t *testing.T) {
 		j := new(rmake.BuilderRequest)
 		infi := new(rmake.File)
 		infi.Contents = []byte("#include <stdio.h>\nint main() {printf(\"Hello\");}")
-		infi.Mode = 0777
-		infi.Path = "builds/TESTSESSION/main.c"
+		infi.Mode = 0666
+		infi.Path = "main.c"
 		j.Input = append(j.Input, infi)
 		j.ResultAddress = "manager"
 		j.Session = "TESTSESSION"
@@ -85,6 +84,7 @@ func TestBuild(t *testing.T) {
 		j.BuildJob.Command = "gcc"
 		j.BuildJob.Args = []string{"main.c", "-Wall"}
 		j.BuildJob.Output = "a.out"
+		j.BuildJob.Deps = []string{"main.c"}
 		time.Sleep(time.Second)
 		buildCon,err := net.Dial("tcp", "localhost:12335")
 		if err != nil {
