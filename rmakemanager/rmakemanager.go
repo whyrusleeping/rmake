@@ -10,6 +10,15 @@ import (
 	"github.com/whyrusleeping/rmake/types"
 )
 
+// Allocate resources to the request
+func HandleManagerRequest(request *rmake.ManagerRequest) {
+	// handle the request
+
+	// So do we want to keep a line open for the FinalBuildResult?
+	// Or do we want a handler for that too?
+	// Questions for tomorrow.
+}
+
 // goroutine to handle a new connection from a client.
 // Determines what resources are avaliable and what
 // resources the request requires.

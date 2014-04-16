@@ -223,13 +223,13 @@ func (rmc *RMakeConf) DoBuild() error {
 		return err
 	}
 
+	// What do we want to do with the FinalBuildResult?
+	// (Place holder, because go sucks and is dislikes unused variables)
 	if fbr.Success {
 		fmt.Printf("Success!\n")
 	} else {
 		fmt.Printf("Error!\n")
 	}
-
-	// What do we want to do with the FinalBuildResult?
 
 	return nil
 }
