@@ -1,8 +1,8 @@
 package rmake
 
 import (
-	"time"
 	"encoding/gob"
+	"time"
 )
 
 func init() {
@@ -13,6 +13,7 @@ func init() {
 	gob.Register(&RequiredFileMessage{})
 	gob.Register(&BuilderInfoMessage{})
 	gob.Register(&BuildFinishedMessage{})
+	gob.Register(&BuildStatus{})
 	gob.Register(&Job{})
 }
 
@@ -32,8 +33,8 @@ type BuilderRequest struct {
 //Builder -> Manager
 type BuildFinishedMessage struct {
 	//Standard out from running a job
-	Stdout string
-	Error string
+	Stdout  string
+	Error   string
 	Success bool
 }
 
@@ -62,15 +63,23 @@ type ManagerRequest struct {
 	Files []*File
 }
 
+// A message to indicate to the client the build status
+type BuildStatus struct {
+	// The status mesage
+	Message string
+	// The percent complete
+	PercentComplete float32
+}
+
 //The final message sent back from the manager after the build is done
 //Manager -> Client
 type FinalBuildResult struct {
 	Session string
 
-	Success bool
-	Error string
-	Stdout string
-	Results []*File
+	Success   bool
+	Error     string
+	Stdout    string
+	Results   []*File
 	BuildTime time.Time
 }
 
@@ -89,6 +98,6 @@ type RequiredFileMessage struct {
 //Builder -> Manager
 type BuilderInfoMessage struct {
 	QueuedJobs int
-	CPULoad float32
-	MemUse float32
+	CPULoad    float32
+	MemUse     float32
 }

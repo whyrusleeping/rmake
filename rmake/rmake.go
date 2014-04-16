@@ -5,11 +5,11 @@ import (
 	"compress/gzip"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
-	"errors"
 	"path/filepath"
 	"time"
 
@@ -23,46 +23,33 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	p.Arch = "Arch" //lol
 	p.OS = "Arch (the OS)"
 
-	for _,v := range conf.Files {
+	for _, v := range conf.Files {
 		f := rmake.LoadFile(v.Path)
 		if f != nil {
 			p.Files = append(p.Files, f)
 		}
 	}
-	/*
-		p.Output = conf.Output
-		p.Command = conf.Command
-		p.Args = conf.Args
-		p.Session = conf.Session
-		for _,v := range conf.Files {
-			f := v.LoadFile()
-			if f != nil {
-				p.Files = append(p.Files, f)
-			}
-		}
-	*/
 	return p
 }
 
-
 //The in memory representation of the configuration file
 type RMakeConf struct {
-	Server string
-	Files []*rmake.FileInfo `json:",omitempty"`
-	Jobs []*rmake.Job `json:",omitempty"`
-	Output string
-	Session string
-	Vars map[string]string
+	Server      string
+	Files       []*rmake.FileInfo `json:",omitempty"`
+	Jobs        []*rmake.Job      `json:",omitempty"`
+	Output      string
+	Session     string
+	Vars        map[string]string
 	Compression string
 	ignore      []string `json:",omitempty"`
 }
 
 //Check to make sure that all the files required by all the jobs are added
 func (rmc *RMakeConf) Validate() error {
-	for _,j := range rmc.Jobs {
-		for _,dep := range j.Deps {
+	for _, j := range rmc.Jobs {
+		for _, dep := range j.Deps {
 			found := false
-			for _,f := range rmc.Files {
+			for _, f := range rmc.Files {
 				if f.Path == dep {
 					found = true
 					break
@@ -167,6 +154,48 @@ func (rmc *RMakeConf) Status() error {
 	return nil
 }
 
+// Prints a build status
+func PrintBuildStatus(status *rmake.BuildStatus) {
+	fmt.Printf("%s\n", status.Message)
+	fmt.Printf("Percent Complete: %d\n", status.PercentComplete)
+}
+
+// Processes feed back as it comes in
+// Waits for final build result
+func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
+	var gobint interface{}
+	var fbr *rmake.FinalBuildResult
+
+	unzip, err := gzip.NewReader(c)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(unzip)
+
+	// Wait till we have what we want
+	for fbr == nil {
+		// Decode some data
+		err = dec.Decode(&gobint)
+		if err != nil {
+			fmt.Println(err)
+			//return nil, err // I don't think we want to simply die...
+		}
+		// Found some data, grab the type...
+		switch gobtype := gobint.(type) {
+		case *rmake.BuildStatus:
+			fmt.Printf("Build Status: %d\n", gobtype)
+			//PrintBuildStatus((*rmake.BuildStatus)(gobint)) // Doesn't work for some reason
+		case *rmake.FinalBuildResult:
+			fmt.Printf("Final Build Result: %d\n", gobtype)
+			fbr = (*rmake.FinalBuildResult)(gobtype)
+		default:
+			fmt.Printf("Unknown Type.\n", gobtype)
+		}
+	}
+
+	return fbr, nil
+}
+
 //Perform a build as specified by the rmake config file
 func (rmc *RMakeConf) DoBuild() error {
 	//Create a package
@@ -187,42 +216,21 @@ func (rmc *RMakeConf) DoBuild() error {
 	//Make sure all data gets flushed through
 	zipp.Close()
 
-	//Wrap the socket in a gob unzipper
-	resp := new(rmake.BuilderResult)
-	unzip, err := gzip.NewReader(con)
-
+	// Wait for the result
+	var fbr *rmake.FinalBuildResult
+	fbr, err = AwaitResult(con)
 	if err != nil {
 		return err
 	}
-	dec := gob.NewDecoder(unzip)
 
-	//Read (gob-unzip) the response from the server
-	err = dec.Decode(resp)
-	if err != nil {
-		fmt.Println(err)
-		return err
+	if fbr.Success {
+		fmt.Printf("Success!\n")
+	} else {
+		fmt.Printf("Error!\n")
 	}
 
-	/*
-	if !resp.Success {
-		fmt.Println("Build failed.")
-		fmt.Println(resp.Stdout)
-		fmt.Println(resp.Error)
-		rmc.Clean()
-		return nil
-	}
-	*/
-	//fmt.Printf("Build finished, output size: %d\n", len(resp.Binary.Contents))
-	//Save whatever session the server used
-	/*
-		rmc.Session = resp.Session
-		err = resp.Binary.Save()
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-		fmt.Println(resp.Stdout)
-	*/
+	// What do we want to do with the FinalBuildResult?
+
 	return nil
 }
 
@@ -271,10 +279,9 @@ func (rmc *RMakeConf) Save(file string) error {
 	return err
 }
 
-
 func main() {
 	//Try and load default configuration
-	rmc,err := LoadRMakeConf("rmake.json")
+	rmc, err := LoadRMakeConf("rmake.json")
 	if err != nil {
 		rmc = NewRMakeConf()
 	}
@@ -293,10 +300,10 @@ func main() {
 	//Parse command line arguments
 	switch os.Args[1] {
 	case "add":
-		for _,v := range os.Args[2:] {
+		for _, v := range os.Args[2:] {
 			fi := new(rmake.FileInfo)
 			fi.Path = v
-			fi.LastTime = time.Now().AddDate(-20,0,0)
+			fi.LastTime = time.Now().AddDate(-20, 0, 0)
 			fmt.Printf("Adding: '%s'\n", v)
 			rmc.Files = append(rmc.Files, fi)
 		}
