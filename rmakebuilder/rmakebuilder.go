@@ -6,6 +6,7 @@ import (
 	"path"
 	"fmt"
 	"os"
+	"log"
 	"os/exec"
 	"time"
 	"net"
@@ -49,6 +50,7 @@ func NewBuilder(host string, manager string) *Builder {
 }
 
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
+	log.Printf("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
 	for _,f := range req.Input {
 		err := f.Save(sdir)
@@ -119,16 +121,18 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		fmt.Println("Sending of result to target failed.")
 	}
 	fmt.Println("Job finished!")
+	log.Printf("Job for session '%s' finished.\n", req.Session)
 }
 
 func (b *Builder) Stop() {
-	fmt.Println("Shutting down builder.")
+	log.Println("Shutting down builder.")
 	b.Running = false
 	b.list.Close()
 	b.manager.Close()
 }
 
 func (b *Builder) Start() {
+	log.Println("Starting builder.")
 	b.Running = true
 	go b.StartPublisher()
 
@@ -141,7 +145,7 @@ func (b *Builder) Start() {
 				fmt.Printf("Listener Error: %s\n", err)
 				continue
 			} else {
-				fmt.Println("Shutting down server socket...")
+				log.Println("Shutting down server socket...")
 				return
 			}
 		}
@@ -154,6 +158,7 @@ func (b *Builder) SendMsgToManager(i interface{}) error {
 }
 
 func (b *Builder) HandleConnection(con net.Conn) {
+	log.Printf("Handling new connection from %s\n", con.RemoteAddr().String())
 	dec := gob.NewDecoder(con)
 
 	var i interface{}
@@ -168,19 +173,20 @@ func (b *Builder) HandleConnection(con net.Conn) {
 			//Get a file from another node
 			mes.Payload.Save(path.Join("builds", mes.Session))
 		case *rmake.BuilderRequest:
-			fmt.Println("Got a builder request!")
+			log.Println("Got a builder request!")
 			b.RunJob(mes)
 		}
 	}
 }
 
 func (b *Builder) SendStatusUpdate() error {
-	//TODO: get system information
-	fmt.Println("Sending system load update!");
+	//TODO: get actual system information
+	log.Println("Sending system load update!");
 	stat := new(rmake.BuilderInfoMessage)
-	stat.CPULoad = 0.04
-	stat.QueuedJobs = 7
-	stat.MemUse = 12345
+	stat.CPULoad = GetCpuUsage()
+	stat.QueuedJobs = 0
+	stat.MemUse = 0
+	log.Println(stat)
 
 	err := b.SendMsgToManager(stat)
 	if err != nil {
