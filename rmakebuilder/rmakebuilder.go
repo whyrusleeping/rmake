@@ -12,13 +12,10 @@ import (
 	"time"
 	"net"
 	"github.com/whyrusleeping/rmake/types"
-	"compress/gzip"
 )
 
 type Builder struct {
 	manager net.Conn
-	wri     *gzip.Writer
-	rea     *gzip.Reader
 	enc     *gob.Encoder
 	dec     *gob.Decoder
 	list    net.Listener
@@ -69,6 +66,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 			log.Println(err)
 		}
 	}
+
 	//TODO: Make sure all deps are here!
 	//Wait in some way if they are not
 	for _,dep := range req.BuildJob.Deps {
@@ -138,8 +136,6 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
-	b.wri.Close()
-	b.rea.Close()
 	b.list.Close()
 	b.manager.Close()
 }
@@ -147,10 +143,6 @@ func (b *Builder) Stop() {
 func (b *Builder) Start(nproc int) {
 	log.Println("Starting builder.")
 	b.Running = true
-	err := b.DoHandshake()
-	if err != nil {
-		panic(err)
-	}
 
 	go b.StartPublisher()
 
@@ -288,6 +280,11 @@ flag.IntVar(&procs, "p", 2, "Number of processors to use.")
 	flag.Parse()
 
 	fmt.Println("rmakebuilder")
+
 	b := NewBuilder(listname, manager)
+	err := b.DoHandshake()
+	if err != nil {
+		panic(err)
+	}
 	b.Start(procs)
 }
