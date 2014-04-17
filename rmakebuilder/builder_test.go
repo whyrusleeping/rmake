@@ -21,7 +21,7 @@ func TestUpdates(t *testing.T) {
 	go func() {
 		b = NewBuilder(":12345", "localhost:12344")
 		b.UpdateFrequency = time.Millisecond
-		b.Start()
+		b.Start(2)
 	}()
 
 	con,err := mgr.Accept()
@@ -68,7 +68,7 @@ func TestBuild(t *testing.T) {
 
 	go func() {
 		b := NewBuilder(":12335", "localhost:12334")
-		b.Start()
+		b.Start(2)
 	}()
 
 	go func() {
