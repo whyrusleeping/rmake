@@ -10,10 +10,136 @@ import (
 	"github.com/whyrusleeping/rmake/types"
 )
 
+// Main manager type, basically globals right now
+type Manager struct {
+	getUuid chan int
+	putUuid chan int
+	bcMap   map[int]*BuilderConnection
+	list    net.Listener
+}
+
+// Builder Connection Type
+type BuilderConnection struct {
+	// The builder's uuid
+	UUID int
+	// The builder's hostname
+	Hostname string
+	// The backing network connection
+	conn net.Conn
+	// The gzip writing pipe
+	wri *gzip.Writer
+	// The gzip reading pipe
+	rea *gzip.Reader
+	// The gob encoder
+	enc *gob.Encoder
+	// The gob decoder
+	dec *gob.Decoder
+}
+
+// Sets up a new builder connection
+func NewBuilderConnection(c net.Conn, uuid int, hn string) *BuilderConnection {
+	// Create Writer
+	wri := gzip.NewWriter(c)
+	// Create Reader
+	rea, err := gzip.NewReader(c)
+	if err != nil {
+		c.Close()
+		return nil
+	}
+	// Build bulder connection
+	bc := new(BuilderConnection)
+	bc.UUID = uuid
+	bc.Hostname = hn
+	bc.conn = c
+	bc.wri = wri
+	bc.rea = rea
+	bc.enc = gob.NewEncoder(wri)
+	bc.dec = gob.NewDecoder(rea)
+	return bc
+}
+
+//
+func (b *BuilderConnection) Send(i interface{}) error {
+	err := b.enc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	b.wri.Flush()
+	return nil
+}
+
+//
+func (b *BuilderConnection) Recieve() (interface{}, error) {
+	var i interface{}
+	err := b.dec.Decode(&i)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
+// Make a new manager
+func NewManager(listname string) *Manager {
+	//Start the server socket
+	list, err := net.Listen("tcp", listname)
+	if err != nil {
+		panic(err)
+	}
+	m := new(Manager)
+	m.getUuid = make(chan int)
+	m.putUuid = make(chan int)
+	m.list = list
+	go m.UUIDGenerator()
+	return m
+}
+
+func (m *Manager) UUIDGenerator() {
+	var free []int
+	nextUuid := 0
+	maxUuid := 0
+	for {
+		select {
+		case m.getUuid <- nextUuid:
+			if len(free) > 0 {
+				nextUuid = free[0]
+				free = free[1:]
+			} else {
+				maxUuid++
+				nextUuid = maxUuid
+			}
+		case id := <-m.putUuid:
+			free = append(free, id)
+		}
+	}
+}
+
+// Allocate resources to the request
+func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
+	// handle the request
+
+	// So do we want to keep a line open for the FinalBuildResult?
+	// Or do we want a handler for that too?
+	// Questions for tomorrow.
+}
+
+//
+func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con net.Conn) {
+	fmt.Println("Handling announcement")
+	uuid := <-m.getUuid
+	bc := NewBuilderConnection(con, uuid, bldr.Hostname)
+	m.bcMap[uuid] = bc
+	ack := new(rmake.ManagerAcknowledge)
+	ack.UUID = <-m.getUuid
+	err := bc.Send(ack)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 // goroutine to handle a new connection from a client.
 // Determines what resources are avaliable and what
 // resources the request requires.
-func HandleConnection(c net.Conn) {
+func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
 
 	unzip, err := gzip.NewReader(c)
@@ -33,11 +159,48 @@ func HandleConnection(c net.Conn) {
 		fmt.Printf("Builder Result: %d\n", gobtype)
 	case *rmake.ManagerRequest:
 		fmt.Printf("Manager Request: %d\n", gobtype)
+	case *rmake.BuilderAnnouncement:
+		fmt.Printf("Builder Announcement: %d\n", gobtype)
+		m.HandleBuilderAnnouncement(gobint.(*rmake.BuilderAnnouncement), c)
 	default:
 		fmt.Printf("Unknown Type.\n", gobtype)
 	}
 
 	return
+}
+
+func (m *Manager) Reply(i interface{}, addr string) error {
+
+	fmt.Println("Replying to %s\n", addr)
+
+	mgr, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	wrt := gzip.NewWriter(mgr)
+	enc := gob.NewEncoder(wrt)
+
+	err = enc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	wrt.Close()
+	mgr.Close()
+	return nil
+}
+
+func (m *Manager) Start() {
+	//Accept and handle new client connections
+	for {
+		con, err := m.list.Accept()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		//Handle clients in separate 'thread'
+		go m.HandleConnection(con)
+	}
 }
 
 // main
@@ -54,21 +217,6 @@ func main() {
 
 	fmt.Println("rmakemanager\n")
 
-	//Start the server socket
-	list, err := net.Listen("tcp", listname)
-	if err != nil {
-		panic(err)
-	}
-
-	//Accept and handle new client connections
-	for {
-		con, err := list.Accept()
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		//Handle clients in separate 'thread'
-		go HandleConnection(con)
-	}
-
+	manager := NewManager(listname)
+	manager.Start()
 }

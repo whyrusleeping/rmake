@@ -4,6 +4,7 @@ import (
 	"flag"
 	"encoding/gob"
 	"path"
+	"fmt"
 	"os"
 	"log"
 	"os/exec"
@@ -14,37 +15,56 @@ import (
 
 type Builder struct {
 	manager net.Conn
-	mgrEnc *gob.Encoder
-	list net.Listener
+	wri     *gzip.Writer
+	rea     *gzip.Reader
+	enc     *gob.Encoder
+	dec     *gob.Decoder
+	list    net.Listener
 
 	UpdateFrequency time.Duration
-	Running bool
+	Running         bool
 
 	mgrReconnect chan struct{}
 
+	UUID int
 	//Job Queue TODO: use this?
 	JQueue chan *rmake.Job
 }
 
-func NewBuilder(host string, manager string) *Builder {
-	mgr,err := net.Dial("tcp", manager)
+func NewBuilder(listen string, manager string) *Builder {
+	//fmt.Printf("Listen on: %s\nConnect to: %s\n", host, manager)
+	// Setup manager connection
+	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
 		panic(err)
 	}
-
-	list,err := net.Listen("tcp", host)
+	// Setup socket to listen to
+	list, err := net.Listen("tcp", listen)
 	if err != nil {
 		mgr.Close()
 		panic(err)
 	}
-
+	// Create Writer
+	wri := gzip.NewWriter(mgr)
+	// Create Reader
+	fmt.Println("Stops here")
+	rea, err := gzip.NewReader(mgr)
+	if err != nil {
+		mgr.Close()
+		list.Close()
+		panic(err)
+	}
+	// Build new builder
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
-	b.mgrEnc = gob.NewEncoder(mgr)
+	b.wri = wri
+	b.rea = rea
+	b.enc = gob.NewEncoder(wri)
+	b.dec = gob.NewDecoder(rea)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
-
+	fmt.Println("Final test")
 	return b
 }
 
@@ -91,7 +111,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	var outEnc *gob.Encoder
 	if req.ResultAddress == "manager" {
 		//Send to manager
-		outEnc = b.mgrEnc
+		outEnc = b.enc
 	} else {
 		//Send to other builder
 		send, err := net.Dial("tcp", req.ResultAddress)
@@ -126,6 +146,8 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
+	b.wri.Close()
+	b.rea.Close()
 	b.list.Close()
 	b.manager.Close()
 }
@@ -133,10 +155,15 @@ func (b *Builder) Stop() {
 func (b *Builder) Start(nproc int) {
 	log.Println("Starting builder.")
 	b.Running = true
+	err := b.DoHandshake()
+	if err != nil {
+		panic(err)
+	}
+
 	go b.StartPublisher()
 
 	for {
-		con,err := b.list.Accept()
+		con, err := b.list.Accept()
 		if err != nil {
 			log.Println(err)
 			if b.Running {
@@ -152,12 +179,26 @@ func (b *Builder) Start(nproc int) {
 	}
 }
 
-//Send a gob registered type to the manager
-func (b *Builder) SendMsgToManager(i interface{}) error {
-	return b.mgrEnc.Encode(&i)
+// Send a message to the manager
+func (b *Builder) Send(i interface{}) error {
+	err := b.enc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	b.wri.Flush()
+	return nil
 }
 
-//TODO: this should probably be a single message connection
+// Read a message from the manager
+func (b *Builder) Recieve() (interface{}, error) {
+	var i interface{}
+	err := b.dec.Decode(&i)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
 func (b *Builder) HandleConnection(con net.Conn) {
 	log.Printf("Handling new connection from %s\n", con.RemoteAddr().String())
 	dec := gob.NewDecoder(con)
@@ -175,7 +216,6 @@ func (b *Builder) HandleConnection(con net.Conn) {
 			mes.Payload.Save(path.Join("builds", mes.Session))
 		case *rmake.BuilderRequest:
 			log.Println("Got a builder request!")
-			//TODO: instead of running it here, push to a queue
 			b.RunJob(mes)
 		}
 	}
@@ -183,14 +223,14 @@ func (b *Builder) HandleConnection(con net.Conn) {
 
 func (b *Builder) SendStatusUpdate() error {
 	//TODO: get actual system information
-	log.Println("Sending system load update!");
+	log.Println("Sending system load update!")
 	stat := new(rmake.BuilderInfoMessage)
 	stat.CPULoad = GetCpuUsage()
 	stat.QueuedJobs = 0
 	stat.MemUse = 0
 	log.Println(stat)
 
-	err := b.SendMsgToManager(stat)
+	err := b.Send(stat)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -211,22 +251,52 @@ func (b *Builder) StartPublisher() {
 	}
 }
 
+func (b *Builder) DoHandshake() error {
+	fmt.Printf("Starting Handshake\n")
+	announcement := new(rmake.BuilderAnnouncement)
+	host, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	announcement.Hostname = host
+	b.Send(announcement)
+	fmt.Printf("Sent message\n")
+
+	inter, err := b.Recieve()
+	if err != nil {
+		return err
+	}
+	switch inter.(type) {
+	case *rmake.ManagerAcknowledge:
+		b.UUID = inter.(*rmake.ManagerAcknowledge).UUID
+		break
+	default:
+		log.Println("Recieved unknown type.")
+		return errors.New("Error, recieved unexpected type in handshake.\n")
+	}
+
+	log.Println("Handshake Complete, new UUID: %s", b.UUID)
+	return nil
+}
+
 func main() {
 	//Listens on port 11221 by default
 	var listname string
 	var manager string
 	var procs int
 	// Arguement parsing
-	flag.StringVar(&listname, "listname", ":11221",
-					"The ip and or port to listen on")
-	flag.StringVar(&listname, "l", ":11221",
-					"The ip and or port to listen on (shorthand)")
-	flag.StringVar(&manager, "m", "", "Address and port of manager node")
-	flag.IntVar(&procs, "p", 2, "Number of processors to use.")
+	flag.StringVar(&listname, "listen", ":11222",
+		"The ip and or port to listen on")
+	flag.StringVar(&listname, "l", ":11222",
+		"The ip and or port to listen on (shorthand)")
+	flag.StringVar(&manager, "manager", ":11221",
+		"Address and port of manager node")
+	flag.StringVar(&manager, "m", ":11221",
+		"Address and port of manager node (shorthand)")
+flag.IntVar(&procs, "p", 2, "Number of processors to use.")
 	flag.Parse()
 
-	log.Println("rmakebuilder\n")
-
+	fmt.Println("rmakebuilder")
 	b := NewBuilder(listname, manager)
 	b.Start(procs)
 }

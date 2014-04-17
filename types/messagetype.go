@@ -14,7 +14,22 @@ func init() {
 	gob.Register(&BuilderInfoMessage{})
 	gob.Register(&BuildFinishedMessage{})
 	gob.Register(&BuildStatus{})
+	gob.Register(&BuilderAnnouncement{})
+	gob.Register(&ManagerAcknowledge{})
 	gob.Register(&Job{})
+}
+
+// Announce a builder
+type BuilderAnnouncement struct {
+	// The builder's hostname
+	Hostname string
+}
+
+// Acknowledge a builder announcement
+// Provide a uuid
+type ManagerAcknowledge struct {
+	// The UUID of the builder
+	UUID int
 }
 
 //Manager -> Builder
