@@ -42,6 +42,8 @@ func HandleConnection(c net.Conn) {
 		fmt.Printf("Builder Result: %d\n", gobtype)
 	case *rmake.ManagerRequest:
 		fmt.Printf("Manager Request: %d\n", gobtype)
+	case *rmake.BuilderAnnouncement:
+		fmt.Printf("Builder Announcement: %d\n", gobtype)
 	default:
 		fmt.Printf("Unknown Type.\n", gobtype)
 	}

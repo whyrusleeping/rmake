@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/gob"
 	"errors"
 	"flag"
@@ -17,6 +18,7 @@ import (
 
 type Builder struct {
 	manager net.Conn
+	mgrWrt  *gzip.Writer
 	mgrEnc  *gob.Encoder
 	list    net.Listener
 
@@ -31,6 +33,7 @@ type Builder struct {
 }
 
 func NewBuilder(host string, manager string) *Builder {
+	fmt.Printf("Listen on: %s\nConnect to: %s\n", host, manager)
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
 		panic(err)
@@ -42,10 +45,13 @@ func NewBuilder(host string, manager string) *Builder {
 		panic(err)
 	}
 
+	wrt := gzip.NewWriter(mgr)
+
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
-	b.mgrEnc = gob.NewEncoder(mgr)
+	b.mgrWrt = wrt
+	b.mgrEnc = gob.NewEncoder(wrt)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
 
@@ -163,7 +169,12 @@ func (b *Builder) Start() {
 }
 
 func (b *Builder) SendMsgToManager(i interface{}) error {
-	return b.mgrEnc.Encode(&i)
+	err := b.mgrEnc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	b.mgrWrt.Flush()
+	return nil
 }
 
 func (b *Builder) HandleConnection(con net.Conn) {
@@ -219,6 +230,7 @@ func (b *Builder) StartPublisher() {
 }
 
 func (b *Builder) DoHandshake() error {
+	fmt.Printf("Starting Handshake\n")
 	announcement := new(rmake.BuilderAnnouncement)
 	host, err := os.Hostname()
 	if err != nil {
@@ -226,7 +238,7 @@ func (b *Builder) DoHandshake() error {
 	}
 	announcement.Hostname = host
 	b.SendMsgToManager(announcement)
-
+	fmt.Printf("Sent message\n")
 	con, err := b.list.Accept()
 	if err != nil {
 		return err
@@ -258,11 +270,14 @@ func main() {
 	var listname string
 	var manager string
 	// Arguement parsing
-	flag.StringVar(&listname, "listname", ":11221",
+	flag.StringVar(&listname, "listen", ":11222",
 		"The ip and or port to listen on")
-	flag.StringVar(&listname, "l", ":11221",
+	flag.StringVar(&listname, "l", ":11222",
 		"The ip and or port to listen on (shorthand)")
-	flag.StringVar(&manager, "m", "", "Address and port of manager node")
+	flag.StringVar(&manager, "manager", ":11221",
+		"Address and port of manager node")
+	flag.StringVar(&manager, "m", ":11221",
+		"Address and port of manager node (shorthand)")
 	flag.Parse()
 
 	fmt.Println("rmakebuilder\n")
