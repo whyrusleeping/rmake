@@ -10,15 +10,76 @@ import (
 	"github.com/whyrusleeping/rmake/types"
 )
 
+// Main manager type, basically globals right now
 type Manager struct {
 	getUuid chan int
 	putUuid chan int
-
-	list net.Listener
+	bcMap   map[int]*BuilderConnection
+	list    net.Listener
 }
 
-func NewManager(listname string) *Manager {
+// Builder Connection Type
+type BuilderConnection struct {
+	// The builder's uuid
+	UUID int
+	// The builder's hostname
+	Hostname string
+	// The backing network connection
+	conn net.Conn
+	// The gzip writing pipe
+	wri *gzip.Writer
+	// The gzip reading pipe
+	rea *gzip.Reader
+	// The gob encoder
+	enc *gob.Encoder
+	// The gob decoder
+	dec *gob.Decoder
+}
 
+// Sets up a new builder connection
+func NewBuilderConnection(c net.Conn, uuid int, hn string) *BuilderConnection {
+	// Create Writer
+	wri := gzip.NewWriter(c)
+	// Create Reader
+	rea, err := gzip.NewReader(c)
+	if err != nil {
+		c.Close()
+		return nil
+	}
+	// Build bulder connection
+	bc := new(BuilderConnection)
+	bc.UUID = uuid
+	bc.Hostname = hn
+	bc.conn = c
+	bc.wri = wri
+	bc.rea = rea
+	bc.enc = gob.NewEncoder(wri)
+	bc.dec = gob.NewDecoder(rea)
+	return bc
+}
+
+//
+func (b *BuilderConnection) Send(i interface{}) error {
+	err := b.enc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	b.wri.Flush()
+	return nil
+}
+
+//
+func (b *BuilderConnection) Recieve() (interface{}, error) {
+	var i interface{}
+	err := b.dec.Decode(&i)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
+// Make a new manager
+func NewManager(listname string) *Manager {
 	//Start the server socket
 	list, err := net.Listen("tcp", listname)
 	if err != nil {
@@ -64,9 +125,12 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 //
 func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con net.Conn) {
 	fmt.Println("Handling announcement")
+	uuid := <-m.getUuid
+	bc := NewBuilderConnection(con, uuid, bldr.Hostname)
+	m.bcMap[uuid] = bc
 	ack := new(rmake.ManagerAcknowledge)
 	ack.UUID = <-m.getUuid
-	err := m.Reply(ack, con.RemoteAddr().String())
+	err := bc.Send(ack)
 	if err != nil {
 		fmt.Println(err)
 	}

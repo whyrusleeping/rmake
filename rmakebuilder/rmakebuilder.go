@@ -18,10 +18,10 @@ import (
 
 type Builder struct {
 	manager net.Conn
-	mgrWri  *gzip.Writer
-	mgrRea  *gzip.Reader
-	mgrEnc  *gob.Encoder
-	mgrDec  *gob.Decoder
+	wri     *gzip.Writer
+	rea     *gzip.Reader
+	enc     *gob.Encoder
+	dec     *gob.Decoder
 	list    net.Listener
 
 	UpdateFrequency time.Duration
@@ -60,10 +60,10 @@ func NewBuilder(listen string, manager string) *Builder {
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
-	b.mgrWri = wri
-	b.mgrRea = rea
-	b.mgrEnc = gob.NewEncoder(wri)
-	b.mgrDec = gob.NewDecoder(rea)
+	b.wri = wri
+	b.rea = rea
+	b.enc = gob.NewEncoder(wri)
+	b.dec = gob.NewDecoder(rea)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
 	return b
@@ -99,7 +99,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		resp.Error = err.Error()
 		resp.Success = false
 	}
-	err = b.SendMsgToManager(resp)
+	err = b.Send(resp)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -112,7 +112,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	var outEnc *gob.Encoder
 	if req.ResultAddress == "manager" {
 		//Send to manager
-		outEnc = b.mgrEnc
+		outEnc = b.enc
 	} else {
 		//Send to other builder
 		send, err := net.Dial("tcp", req.ResultAddress)
@@ -147,7 +147,9 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
-	//b.list.Close()
+	b.wri.Close()
+	b.rea.Close()
+	b.list.Close()
 	b.manager.Close()
 }
 
@@ -179,19 +181,19 @@ func (b *Builder) Start() {
 }
 
 // Send a message to the manager
-func (b *Builder) SendMsgToManager(i interface{}) error {
-	err := b.mgrEnc.Encode(&i)
+func (b *Builder) Send(i interface{}) error {
+	err := b.enc.Encode(&i)
 	if err != nil {
 		return err
 	}
-	b.mgrWri.Flush()
+	b.wri.Flush()
 	return nil
 }
 
 // Read a message from the manager
-func (b *Builder) ReadMsgFromManager() (interface{}, error) {
+func (b *Builder) Recieve() (interface{}, error) {
 	var i interface{}
-	err := b.mgrDec.Decode(&i)
+	err := b.dec.Decode(&i)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +231,7 @@ func (b *Builder) SendStatusUpdate() error {
 	stat.MemUse = 0
 	log.Println(stat)
 
-	err := b.SendMsgToManager(stat)
+	err := b.Send(stat)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -258,10 +260,10 @@ func (b *Builder) DoHandshake() error {
 		return err
 	}
 	announcement.Hostname = host
-	b.SendMsgToManager(announcement)
+	b.Send(announcement)
 	fmt.Printf("Sent message\n")
 
-	inter, err := b.ReadMsgFromManager()
+	inter, err := b.Recieve()
 	if err != nil {
 		return err
 	}
