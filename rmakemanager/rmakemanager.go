@@ -25,6 +25,8 @@ func NewManager(listname string) *Manager {
 		panic(err)
 	}
 	m := new(Manager)
+	m.getUuid = make(chan int)
+	m.putUuid = make(chan int)
 	m.list = list
 	go m.UUIDGenerator()
 	return m
@@ -61,7 +63,13 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 
 //
 func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con net.Conn) {
-	//con.RemoteAddr()
+	fmt.Println("Handling announcement")
+	ack := new(rmake.ManagerAcknowledge)
+	ack.UUID = <-m.getUuid
+	err := m.Reply(ack, con.RemoteAddr().String())
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 // goroutine to handle a new connection from a client.
@@ -95,6 +103,27 @@ func (m *Manager) HandleConnection(c net.Conn) {
 	}
 
 	return
+}
+
+func (m *Manager) Reply(i interface{}, addr string) error {
+
+	fmt.Println("Replying to %s\n", addr)
+
+	mgr, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	wrt := gzip.NewWriter(mgr)
+	enc := gob.NewEncoder(wrt)
+
+	err = enc.Encode(&i)
+	if err != nil {
+		return err
+	}
+	wrt.Close()
+	mgr.Close()
+	return nil
 }
 
 func (m *Manager) Start() {

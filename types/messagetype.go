@@ -29,7 +29,7 @@ type BuilderAnnouncement struct {
 // Provide a uuid
 type ManagerAcknowledge struct {
 	// The UUID of the builder
-	UUID string
+	UUID int
 }
 
 //Manager -> Builder

@@ -27,7 +27,7 @@ type Builder struct {
 
 	mgrReconnect chan struct{}
 
-	UUID string
+	UUID int
 	//Job Queue TODO: use this?
 	JQueue []*rmake.Job
 }
