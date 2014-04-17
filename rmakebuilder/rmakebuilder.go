@@ -1,18 +1,19 @@
 package main
 
 import (
-	"flag"
-	"encoding/gob"
-	"path"
-	"errors"
-	"fmt"
-	"os"
-	"log"
-	"os/exec"
-	"time"
-	"net"
-	"github.com/whyrusleeping/rmake/types"
 	"compress/gzip"
+	"encoding/gob"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"os/exec"
+	"path"
+	"time"
+
+	"github.com/whyrusleeping/rmake/types"
 )
 
 type Builder struct {
@@ -47,7 +48,6 @@ func NewBuilder(listen string, manager string) *Builder {
 		panic(err)
 	}
 
-
 	// Build new builder
 	b := new(Builder)
 	b.list = list
@@ -63,7 +63,7 @@ func NewBuilder(listen string, manager string) *Builder {
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
-	for _,f := range req.Input {
+	for _, f := range req.Input {
 		err := f.Save(sdir)
 		if err != nil {
 			log.Println(err)
@@ -71,9 +71,9 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 	//TODO: Make sure all deps are here!
 	//Wait in some way if they are not
-	for _,dep := range req.BuildJob.Deps {
+	for _, dep := range req.BuildJob.Deps {
 		depPath := path.Join(sdir, dep)
-		_,err := os.Stat(depPath)
+		_, err := os.Stat(depPath)
 		if err != nil {
 			log.Printf("Missing dependency: '%s'\n", dep)
 		}
@@ -83,14 +83,14 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	cmd := exec.Command(req.BuildJob.Command, req.BuildJob.Args...)
 	cmd.Dir = sdir
 
-	out,err := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	resp.Stdout = string(out)
 	if err != nil {
 		log.Println(err)
 		resp.Error = err.Error()
 		resp.Success = false
 	}
-	err = b.Send(resp)
+	err = b.SendToManager(resp)
 	if err != nil {
 		log.Println(err)
 	}
@@ -172,7 +172,7 @@ func (b *Builder) Start(nproc int) {
 }
 
 // Send a message to the manager
-func (b *Builder) Send(i interface{}) error {
+func (b *Builder) SendToManager(i interface{}) error {
 	err := b.enc.Encode(&i)
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func (b *Builder) Send(i interface{}) error {
 }
 
 // Read a message from the manager
-func (b *Builder) Recieve() (interface{}, error) {
+func (b *Builder) RecieveFromManager() (interface{}, error) {
 	var i interface{}
 	err := b.dec.Decode(&i)
 	if err != nil {
@@ -221,7 +221,7 @@ func (b *Builder) SendStatusUpdate() error {
 	stat.MemUse = 0
 	log.Println(stat)
 
-	err := b.Send(stat)
+	err := b.SendToManager(stat)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -250,10 +250,10 @@ func (b *Builder) DoHandshake() error {
 		return err
 	}
 	announcement.Hostname = host
-	b.Send(announcement)
+	b.SendToManager(announcement)
 	fmt.Printf("Sent message\n")
 
-	inter, err := b.Recieve()
+	inter, err := b.RecieveFromManager()
 	if err != nil {
 		return err
 	}
@@ -271,20 +271,22 @@ func (b *Builder) DoHandshake() error {
 }
 
 func main() {
-	//Listens on port 11221 by default
 	var listname string
 	var manager string
 	var procs int
 	// Arguement parsing
+	// Listen on ip and port
 	flag.StringVar(&listname, "listen", ":11222",
 		"The ip and or port to listen on")
 	flag.StringVar(&listname, "l", ":11222",
 		"The ip and or port to listen on (shorthand)")
+	// Manager ip and port
 	flag.StringVar(&manager, "manager", ":11221",
 		"Address and port of manager node")
 	flag.StringVar(&manager, "m", ":11221",
 		"Address and port of manager node (shorthand)")
-flag.IntVar(&procs, "p", 2, "Number of processors to use.")
+	// Avaliable processors
+	flag.IntVar(&procs, "p", 2, "Number of processors to use.")
 	flag.Parse()
 
 	fmt.Println("rmakebuilder")

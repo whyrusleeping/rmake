@@ -54,7 +54,7 @@ func (b *BuilderConnection) Send(i interface{}) error {
 	if err != nil {
 		return err
 	}
-	b.wri.Flush()
+	//b.wri.Flush()
 	return nil
 }
 
@@ -78,6 +78,7 @@ func NewManager(listname string) *Manager {
 	m := new(Manager)
 	m.getUuid = make(chan int)
 	m.putUuid = make(chan int)
+	m.bcMap = make(map[int]*BuilderConnection)
 	m.list = list
 	go m.UUIDGenerator()
 	return m
@@ -119,7 +120,8 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 	bc := NewBuilderConnection(con, uuid, bldr.Hostname)
 	m.bcMap[uuid] = bc
 	ack := new(rmake.ManagerAcknowledge)
-	ack.UUID = <-m.getUuid
+	ack.UUID = uuid
+	fmt.Println("test2")
 	err := bc.Send(ack)
 	if err != nil {
 		fmt.Println(err)
@@ -132,13 +134,14 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
 
-	unzip, err := gzip.NewReader(c)
-	if err != nil {
-		return
-	}
+	/*
+		unzip, err := gzip.NewReader(c)
+		if err != nil {
+			return
+		}*/
 
-	dec := gob.NewDecoder(unzip)
-	err = dec.Decode(&gobint)
+	dec := gob.NewDecoder(c)
+	err := dec.Decode(&gobint)
 	if err != nil {
 		fmt.Println(err)
 		return
