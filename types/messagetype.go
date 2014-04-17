@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const ProtocolVersion = 1
+
 func init() {
 	gob.Register(&BuilderRequest{})
 	gob.Register(&BuilderResult{})
@@ -23,6 +25,18 @@ func init() {
 type BuilderAnnouncement struct {
 	// The builder's hostname
 	Hostname string
+	// The Builder's listening address
+	ListenerAddr string
+	// The version of the protocol we are using
+	ProtocolVersion int
+}
+
+func NewBuilderAnnouncement(hn string, la string) *BuilderAnnouncement {
+	ba := new(BuilderAnnouncement)
+	ba.Hostname = hn
+	ba.ListenerAddr = la
+	ba.ProtocolVersion = ProtocolVersion
+	return ba
 }
 
 // Acknowledge a builder announcement
@@ -30,6 +44,32 @@ type BuilderAnnouncement struct {
 type ManagerAcknowledge struct {
 	// The UUID of the builder
 	UUID int
+	// The version of the protocol we are using
+	ProtocolVersion int
+	// Successful or not
+	Success bool
+	// Message
+	Message string
+}
+
+// Create a new manager ack
+func NewManagerAcknowledge(uuid int, s bool, m string) *ManagerAcknowledge {
+	ma := new(ManagerAcknowledge)
+	ma.ProtocolVersion = ProtocolVersion
+	ma.Success = s
+	ma.Message = m
+	ma.UUID = uuid
+	return ma
+}
+
+// Create a new successful manager ack
+func NewManagerAcknowledgeSuccess(uuid int) *ManagerAcknowledge {
+	return NewManagerAcknowledge(uuid, true, "")
+}
+
+// Create a new failed manager ack
+func NewManagerAcknowledgeFailure(message string) *ManagerAcknowledge {
+	return NewManagerAcknowledge(-1, false, message)
 }
 
 //Manager -> Builder

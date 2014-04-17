@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"encoding/gob"
 	"errors"
 	"flag"
@@ -18,11 +17,14 @@ import (
 
 type Builder struct {
 	manager net.Conn
-	wri     *gzip.Writer
-	rea     *gzip.Reader
-	enc     *gob.Encoder
-	dec     *gob.Decoder
-	list    net.Listener
+	//	wri     *gzip.Writer
+	//	rea     *gzip.Reader
+	enc  *gob.Encoder
+	dec  *gob.Decoder
+	list net.Listener
+
+	ListenerAddr string
+	ManagerAddr  string
 
 	UpdateFrequency time.Duration
 	Running         bool
@@ -51,6 +53,8 @@ func NewBuilder(listen string, manager string) *Builder {
 	// Build new builder
 	b := new(Builder)
 	b.list = list
+	b.ListenerAddr = listen
+	b.ManagerAddr = manager
 	b.manager = mgr
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
@@ -138,8 +142,8 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
-	b.wri.Close()
-	b.rea.Close()
+	//b.wri.Close()
+	//b.rea.Close()
 	b.list.Close()
 	b.manager.Close()
 }
@@ -244,12 +248,13 @@ func (b *Builder) StartPublisher() {
 
 func (b *Builder) DoHandshake() error {
 	fmt.Printf("Starting Handshake\n")
-	announcement := new(rmake.BuilderAnnouncement)
+
 	host, err := os.Hostname()
 	if err != nil {
 		return err
 	}
-	announcement.Hostname = host
+
+	announcement := rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
 	b.SendToManager(announcement)
 	fmt.Printf("Sent message\n")
 
@@ -257,17 +262,23 @@ func (b *Builder) DoHandshake() error {
 	if err != nil {
 		return err
 	}
+
+	var ack *rmake.ManagerAcknowledge
 	switch inter.(type) {
 	case *rmake.ManagerAcknowledge:
-		b.UUID = inter.(*rmake.ManagerAcknowledge).UUID
+		ack = inter.(*rmake.ManagerAcknowledge)
 		break
 	default:
 		log.Println("Recieved unknown type.")
 		return errors.New("Error, recieved unexpected type in handshake.\n")
 	}
 
-	log.Println("Handshake Complete, new UUID: %s", b.UUID)
-	return nil
+	if ack.Success {
+		b.UUID = ack.UUID
+		log.Printf("Handshake Complete, new UUID: %d\n", b.UUID)
+		return nil
+	}
+	return errors.New(ack.Message)
 }
 
 func main() {

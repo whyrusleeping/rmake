@@ -24,12 +24,14 @@ type BuilderConnection struct {
 	UUID int
 	// The builder's hostname
 	Hostname string
+	// The listening address
+	ListenerAddr string
 	// The backing network connection
 	conn net.Conn
 	// The gzip writing pipe
-	wri *gzip.Writer
+	//	wri *gzip.Writer
 	// The gzip reading pipe
-	rea *gzip.Reader
+	//	rea *gzip.Reader
 	// The gob encoder
 	enc *gob.Encoder
 	// The gob decoder
@@ -37,11 +39,12 @@ type BuilderConnection struct {
 }
 
 // Sets up a new builder connection
-func NewBuilderConnection(c net.Conn, uuid int, hn string) *BuilderConnection {
+func NewBuilderConnection(c net.Conn, la string, uuid int, hn string) *BuilderConnection {
 	// Build bulder connection
 	bc := new(BuilderConnection)
 	bc.UUID = uuid
 	bc.Hostname = hn
+	bc.ListenerAddr = la
 	bc.conn = c
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
@@ -97,6 +100,7 @@ func (m *Manager) UUIDGenerator() {
 			} else {
 				maxUuid++
 				nextUuid = maxUuid
+				fmt.Println("Setting next UUID to: %d\n", nextUuid)
 			}
 		case id := <-m.putUuid:
 			free = append(free, id)
@@ -116,15 +120,29 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 //
 func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con net.Conn) {
 	fmt.Println("Handling announcement")
+	var ack *rmake.ManagerAcknowledge
+	// Make the new builder connection
+	errored := false
 	uuid := <-m.getUuid
-	bc := NewBuilderConnection(con, uuid, bldr.Hostname)
-	m.bcMap[uuid] = bc
-	ack := new(rmake.ManagerAcknowledge)
-	ack.UUID = uuid
-	fmt.Println("test2")
+	bc := NewBuilderConnection(con, bldr.ListenerAddr, uuid, bldr.Hostname)
+	if bldr.ProtocolVersion == rmake.ProtocolVersion {
+		// Looks good, add to map and send back success
+		ack = rmake.NewManagerAcknowledgeSuccess(uuid)
+		m.bcMap[uuid] = bc
+	} else {
+		// Mismatch send failure
+		ack = rmake.NewManagerAcknowledgeFailure("Error, protocol version mismatch")
+		errored = true
+	}
+	// Send off the ack
 	err := bc.Send(ack)
 	if err != nil {
 		fmt.Println(err)
+	}
+	// If we errored above, free the uuid
+	if errored {
+		fmt.Println("Errored, returning UUID")
+		m.putUuid <- uuid
 	}
 }
 
