@@ -18,8 +18,10 @@ import (
 
 type Builder struct {
 	manager net.Conn
-	mgrWrt  *gzip.Writer
+	mgrWri  *gzip.Writer
+	mgrRea  *gzip.Reader
 	mgrEnc  *gob.Encoder
+	mgrDec  *gob.Decoder
 	list    net.Listener
 
 	UpdateFrequency time.Duration
@@ -32,29 +34,38 @@ type Builder struct {
 	JQueue []*rmake.Job
 }
 
-func NewBuilder(host string, manager string) *Builder {
-	fmt.Printf("Listen on: %s\nConnect to: %s\n", host, manager)
+func NewBuilder(listen string, manager string) *Builder {
+	//fmt.Printf("Listen on: %s\nConnect to: %s\n", host, manager)
+	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
 		panic(err)
 	}
-
-	list, err := net.Listen("tcp", host)
+	// Setup socket to listen to
+	list, err := net.Listen("tcp", listen)
 	if err != nil {
 		mgr.Close()
 		panic(err)
 	}
-
-	wrt := gzip.NewWriter(mgr)
-
+	// Create Writer
+	wri := gzip.NewWriter(mgr)
+	// Create Reader
+	rea, err := gzip.NewReader(mgr)
+	if err != nil {
+		mgr.Close()
+		list.Close()
+		panic(err)
+	}
+	// Build new builder
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
-	b.mgrWrt = wrt
-	b.mgrEnc = gob.NewEncoder(wrt)
+	b.mgrWri = wri
+	b.mgrRea = rea
+	b.mgrEnc = gob.NewEncoder(wri)
+	b.mgrDec = gob.NewDecoder(rea)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
-
 	return b
 }
 
@@ -136,7 +147,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
-	b.list.Close()
+	//b.list.Close()
 	b.manager.Close()
 }
 
@@ -145,8 +156,7 @@ func (b *Builder) Start() {
 	b.Running = true
 	err := b.DoHandshake()
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 
 	go b.StartPublisher()
@@ -168,13 +178,24 @@ func (b *Builder) Start() {
 	}
 }
 
+// Send a message to the manager
 func (b *Builder) SendMsgToManager(i interface{}) error {
 	err := b.mgrEnc.Encode(&i)
 	if err != nil {
 		return err
 	}
-	b.mgrWrt.Flush()
+	b.mgrWri.Flush()
 	return nil
+}
+
+// Read a message from the manager
+func (b *Builder) ReadMsgFromManager() (interface{}, error) {
+	var i interface{}
+	err := b.mgrDec.Decode(&i)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
 }
 
 func (b *Builder) HandleConnection(con net.Conn) {
@@ -239,22 +260,14 @@ func (b *Builder) DoHandshake() error {
 	announcement.Hostname = host
 	b.SendMsgToManager(announcement)
 	fmt.Printf("Sent message\n")
-	con, err := b.list.Accept()
+
+	inter, err := b.ReadMsgFromManager()
 	if err != nil {
 		return err
 	}
-
-	log.Printf("Handshake from %s\n", con.RemoteAddr().String())
-	dec := gob.NewDecoder(con)
-
-	var i interface{}
-	err = dec.Decode(&i)
-	if err != nil {
-		return err
-	}
-	switch i.(type) {
+	switch inter.(type) {
 	case *rmake.ManagerAcknowledge:
-		b.UUID = i.(*rmake.ManagerAcknowledge).UUID
+		b.UUID = inter.(*rmake.ManagerAcknowledge).UUID
 		break
 	default:
 		log.Println("Recieved unknown type.")
@@ -266,7 +279,6 @@ func (b *Builder) DoHandshake() error {
 }
 
 func main() {
-	//Listens on port 11221 by default
 	var listname string
 	var manager string
 	// Arguement parsing
