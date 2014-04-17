@@ -4,6 +4,7 @@ import (
 	"flag"
 	"encoding/gob"
 	"path"
+	"errors"
 	"fmt"
 	"os"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"time"
 	"net"
 	"github.com/whyrusleeping/rmake/types"
+	"compress/gzip"
 )
 
 type Builder struct {
@@ -44,24 +46,14 @@ func NewBuilder(listen string, manager string) *Builder {
 		mgr.Close()
 		panic(err)
 	}
-	// Create Writer
-	wri := gzip.NewWriter(mgr)
-	// Create Reader
-	fmt.Println("Stops here")
-	rea, err := gzip.NewReader(mgr)
-	if err != nil {
-		mgr.Close()
-		list.Close()
-		panic(err)
-	}
+
+
 	// Build new builder
 	b := new(Builder)
 	b.list = list
 	b.manager = mgr
-	b.wri = wri
-	b.rea = rea
-	b.enc = gob.NewEncoder(wri)
-	b.dec = gob.NewDecoder(rea)
+	b.enc = gob.NewEncoder(mgr)
+	b.dec = gob.NewDecoder(mgr)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
 	fmt.Println("Final test")
@@ -98,7 +90,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		resp.Error = err.Error()
 		resp.Success = false
 	}
-	err = b.SendMsgToManager(resp)
+	err = b.Send(resp)
 	if err != nil {
 		log.Println(err)
 	}
@@ -185,7 +177,6 @@ func (b *Builder) Send(i interface{}) error {
 	if err != nil {
 		return err
 	}
-	b.wri.Flush()
 	return nil
 }
 

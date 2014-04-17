@@ -38,23 +38,13 @@ type BuilderConnection struct {
 
 // Sets up a new builder connection
 func NewBuilderConnection(c net.Conn, uuid int, hn string) *BuilderConnection {
-	// Create Writer
-	wri := gzip.NewWriter(c)
-	// Create Reader
-	rea, err := gzip.NewReader(c)
-	if err != nil {
-		c.Close()
-		return nil
-	}
 	// Build bulder connection
 	bc := new(BuilderConnection)
 	bc.UUID = uuid
 	bc.Hostname = hn
 	bc.conn = c
-	bc.wri = wri
-	bc.rea = rea
-	bc.enc = gob.NewEncoder(wri)
-	bc.dec = gob.NewDecoder(rea)
+	bc.enc = gob.NewEncoder(c)
+	bc.dec = gob.NewDecoder(c)
 	return bc
 }
 
