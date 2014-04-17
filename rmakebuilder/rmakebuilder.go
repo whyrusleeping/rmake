@@ -50,6 +50,7 @@ func NewBuilder(listen string, manager string) *Builder {
 	// Create Writer
 	wri := gzip.NewWriter(mgr)
 	// Create Reader
+	fmt.Println("Stops here")
 	rea, err := gzip.NewReader(mgr)
 	if err != nil {
 		mgr.Close()
@@ -66,6 +67,7 @@ func NewBuilder(listen string, manager string) *Builder {
 	b.dec = gob.NewDecoder(rea)
 	b.UpdateFrequency = time.Second * 15
 	b.mgrReconnect = make(chan struct{})
+	fmt.Println("Final test")
 	return b
 }
 
@@ -294,8 +296,7 @@ func main() {
 		"Address and port of manager node (shorthand)")
 	flag.Parse()
 
-	fmt.Println("rmakebuilder\n")
-
+	fmt.Println("rmakebuilder")
 	b := NewBuilder(listname, manager)
 	b.Start()
 }
