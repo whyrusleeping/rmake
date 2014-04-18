@@ -31,6 +31,7 @@ type BuilderAnnouncement struct {
 	ProtocolVersion int
 }
 
+// Create a new builder announcement
 func NewBuilderAnnouncement(hn string, la string) *BuilderAnnouncement {
 	ba := new(BuilderAnnouncement)
 	ba.Hostname = hn
@@ -118,7 +119,8 @@ type ManagerRequest struct {
 	Files []*File
 }
 
-// A message to indicate to the client the build status
+//A message to indicate to the client the build status
+//Manager -> Client
 type BuildStatus struct {
 	// The status mesage
 	Message string

@@ -61,7 +61,6 @@ func NewBuilder(listen string, manager string, p int) *Builder {
 	b.UpdateFrequency = time.Second * 15
 	b.Halt = make(chan int)
 	b.mgrReconnect = make(chan struct{})
-	fmt.Println("Final test")
 	return b
 }
 
@@ -140,10 +139,6 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Job for session '%s' finished.\n", req.Session)
 }
 
-func (b *Builder) Shutdown() {
-
-}
-
 func (b *Builder) Run() {
 	log.Println("Starting builder.")
 	b.Running = true
@@ -213,10 +208,17 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 // Handles all, but handshake message types
 func (b *Builder) HandleMessage(i interface{}) {
 	switch messType := i.(type) {
+	// Wat?
 	case *rmake.RequiredFileMessage:
 		log.Println("Recieved required file.")
 		//Get a file from another node
 		//mes.Payload.Save(path.Join("builds", mes.Session))
+
+	// Wat wat?
+	case *rmake.BuilderResult:
+		log.Println("Recieved builder result.")
+
+	// Job Request
 	case *rmake.BuilderRequest:
 		log.Println("Recieved builder request.")
 		//b.RunJob(mes)
@@ -273,7 +275,7 @@ func (b *Builder) StartPublisher() {
 }
 
 func (b *Builder) DoHandshake() {
-	fmt.Printf("Starting Handshake\n")
+	log.Printf("Starting Handshake\n")
 
 	host, err := os.Hostname()
 	if err != nil {
@@ -282,7 +284,7 @@ func (b *Builder) DoHandshake() {
 
 	announcement := rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
 	b.SendToManager(announcement)
-	fmt.Printf("Sent message\n")
+	log.Printf("Sent Announcement\n")
 
 	inter, err := b.RecieveFromManager()
 	if err != nil {
@@ -295,7 +297,6 @@ func (b *Builder) DoHandshake() {
 		ack = inter.(*rmake.ManagerAcknowledge)
 		break
 	default:
-		log.Println("Recieved unknown type.")
 		log.Panic(errors.New("Error, recieved unexpected type in handshake.\n"))
 	}
 
