@@ -131,3 +131,70 @@ func TestBuild(t *testing.T) {
 	}
 	os.RemoveAll("builds")
 }
+
+func TestHandshake(t *testing.T) {
+	fmt.Println("\nStarting build test.\n")
+	mgr,err := net.Listen("tcp", ":12340")
+	if err != nil {
+		panic(err)
+	}
+
+	success := false
+	go func() {
+		b := NewBuilder(":12341", "localhost:12340")
+		err := b.DoHandshake()
+		if err != nil {
+			panic(err)
+		}
+		success = true
+		b.Stop()
+	}()
+
+	con,err := mgr.Accept()
+	if err != nil {
+		panic(err)
+	}
+
+	enc := gob.NewEncoder(con)
+
+	var i interface{}
+	dec := gob.NewDecoder(con)
+	recv := 0
+	for {
+		if recv >= 2 {
+			break
+		}
+		err := dec.Decode(&i)
+		if err != nil {
+			if !success {
+				panic(err)
+			} else {
+				return
+			}
+		}
+		switch i := i.(type) {
+		case *rmake.BuilderInfoMessage:
+			fmt.Println(i)
+		case *rmake.BuildFinishedMessage:
+			fmt.Println("Build Finished Message!")
+			fmt.Println(i.Stdout)
+			recv++
+		case *rmake.BuilderResult:
+			fmt.Println("Builder Result.")
+			recv++
+		case *rmake.BuilderAnnouncement:
+			fmt.Printf("Recieved Announcement from %s\n", i.Hostname)
+			ack := new(rmake.ManagerAcknowledge)
+			ack.UUID = 6
+			var inter interface{}
+			inter = ack
+			err := enc.Encode(&inter)
+			if err != nil {
+				panic(err)
+			}
+		default:
+			fmt.Println("Unrecognized Message.")
+		}
+	}
+	os.RemoveAll("builds")
+}
