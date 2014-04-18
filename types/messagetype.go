@@ -13,7 +13,7 @@ func init() {
 	gob.Register(&ManagerRequest{})
 	gob.Register(&FinalBuildResult{})
 	gob.Register(&RequiredFileMessage{})
-	gob.Register(&BuilderInfoMessage{})
+	gob.Register(&BuilderStatusUpdate{})
 	gob.Register(&BuildFinishedMessage{})
 	gob.Register(&BuildStatus{})
 	gob.Register(&BuilderAnnouncement{})
@@ -151,7 +151,7 @@ type RequiredFileMessage struct {
 
 //Sent periodically to the manager to inform it of the builders status
 //Builder -> Manager
-type BuilderInfoMessage struct {
+type BuilderStatusUpdate struct {
 	QueuedJobs int
 	CPULoad    float32
 	MemUse     float32

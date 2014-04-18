@@ -17,11 +17,9 @@ import (
 
 type Builder struct {
 	manager net.Conn
-	//	wri     *gzip.Writer
-	//	rea     *gzip.Reader
-	enc  *gob.Encoder
-	dec  *gob.Decoder
-	list net.Listener
+	enc     *gob.Encoder
+	dec     *gob.Decoder
+	list    net.Listener
 
 	ListenerAddr string
 	ManagerAddr  string
@@ -31,13 +29,13 @@ type Builder struct {
 
 	mgrReconnect chan struct{}
 
-	UUID int
+	Procs int
+	UUID  int
 	//Job Queue TODO: use this?
 	JQueue chan *rmake.Job
 }
 
-func NewBuilder(listen string, manager string) *Builder {
-	//fmt.Printf("Listen on: %s\nConnect to: %s\n", host, manager)
+func NewBuilder(listen string, manager string, p int) *Builder {
 	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
@@ -53,6 +51,7 @@ func NewBuilder(listen string, manager string) *Builder {
 	// Build new builder
 	b := new(Builder)
 	b.list = list
+	b.Procs = p
 	b.ListenerAddr = listen
 	b.ManagerAddr = manager
 	b.manager = mgr
@@ -148,13 +147,9 @@ func (b *Builder) Stop() {
 	b.manager.Close()
 }
 
-func (b *Builder) Start(nproc int) {
+func (b *Builder) Start() {
 	log.Println("Starting builder.")
 	b.Running = true
-	err := b.DoHandshake()
-	if err != nil {
-		panic(err)
-	}
 
 	go b.StartPublisher()
 
@@ -219,7 +214,7 @@ func (b *Builder) HandleConnection(con net.Conn) {
 func (b *Builder) SendStatusUpdate() error {
 	//TODO: get actual system information
 	log.Println("Sending system load update!")
-	stat := new(rmake.BuilderInfoMessage)
+	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
 	stat.QueuedJobs = 0
 	stat.MemUse = 0
@@ -246,12 +241,12 @@ func (b *Builder) StartPublisher() {
 	}
 }
 
-func (b *Builder) DoHandshake() error {
+func (b *Builder) DoHandshake() {
 	fmt.Printf("Starting Handshake\n")
 
 	host, err := os.Hostname()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	announcement := rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
@@ -260,7 +255,7 @@ func (b *Builder) DoHandshake() error {
 
 	inter, err := b.RecieveFromManager()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	var ack *rmake.ManagerAcknowledge
@@ -270,15 +265,13 @@ func (b *Builder) DoHandshake() error {
 		break
 	default:
 		log.Println("Recieved unknown type.")
-		return errors.New("Error, recieved unexpected type in handshake.\n")
+		panic(errors.New("Error, recieved unexpected type in handshake.\n"))
 	}
 
 	if ack.Success {
 		b.UUID = ack.UUID
 		log.Printf("Handshake Complete, new UUID: %d\n", b.UUID)
-		return nil
 	}
-	return errors.New(ack.Message)
 }
 
 func main() {
@@ -301,6 +294,9 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("rmakebuilder")
-	b := NewBuilder(listname, manager)
-	b.Start(procs)
+	b := NewBuilder(listname, manager, procs)
+	// Handshake with the manager
+	b.DoHandshake()
+	// Start the builder
+	b.Start()
 }

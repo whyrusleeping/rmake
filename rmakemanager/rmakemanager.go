@@ -28,12 +28,10 @@ type BuilderConnection struct {
 	ListenerAddr string
 	// The backing network connection
 	conn net.Conn
-	//
+	// The current number of jobs
 	NumJobs int
-	// The gzip writing pipe
-	//	wri *gzip.Writer
-	// The gzip reading pipe
-	//	rea *gzip.Reader
+	// The managing manager
+	Manager *Manager
 	// The gob encoder
 	enc *gob.Encoder
 	// The gob decoder
@@ -41,7 +39,7 @@ type BuilderConnection struct {
 }
 
 // Sets up a new builder connection
-func NewBuilderConnection(c net.Conn, la string, uuid int, hn string) *BuilderConnection {
+func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager) *BuilderConnection {
 	// Build bulder connection
 	bc := new(BuilderConnection)
 	bc.UUID = uuid
@@ -49,6 +47,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string) *BuilderCo
 	bc.ListenerAddr = la
 	bc.conn = c
 	bc.NumJobs = 0
+	bc.Manager = m
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
 	return bc
@@ -62,6 +61,10 @@ func (b *BuilderConnection) Send(i interface{}) error {
 	}
 	//b.wri.Flush()
 	return nil
+}
+
+func (b *BuilderConnection) HandleStatusUpdate(bsu *rmake.BuilderStatusUpdate) {
+	b.Manager.HandleBuilderStatusUpdate(b, bsu)
 }
 
 //
@@ -127,7 +130,7 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 	// Make the new builder connection
 	errored := false
 	uuid := <-m.getUuid
-	bc := NewBuilderConnection(con, bldr.ListenerAddr, uuid, bldr.Hostname)
+	bc := NewBuilderConnection(con, bldr.ListenerAddr, uuid, bldr.Hostname, m)
 	if bldr.ProtocolVersion == rmake.ProtocolVersion {
 		// Looks good, add to map and send back success
 		ack = rmake.NewManagerAcknowledgeSuccess(uuid)
@@ -147,6 +150,10 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 		fmt.Println("Errored, returning UUID")
 		m.putUuid <- uuid
 	}
+}
+
+func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.BuilderStatusUpdate) {
+
 }
 
 // goroutine to handle a new connection from a client.
