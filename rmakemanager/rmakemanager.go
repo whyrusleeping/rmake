@@ -28,6 +28,8 @@ type BuilderConnection struct {
 	ListenerAddr string
 	// The backing network connection
 	conn net.Conn
+	//
+	NumJobs int
 	// The gzip writing pipe
 	//	wri *gzip.Writer
 	// The gzip reading pipe
@@ -46,6 +48,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string) *BuilderCo
 	bc.Hostname = hn
 	bc.ListenerAddr = la
 	bc.conn = c
+	bc.NumJobs = 0
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
 	return bc
