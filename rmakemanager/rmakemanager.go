@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/whyrusleeping/rmake/types"
@@ -82,7 +83,7 @@ func NewManager(listname string) *Manager {
 	//Start the server socket
 	list, err := net.Listen("tcp", listname)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	m := new(Manager)
 	m.getUuid = make(chan int)

@@ -40,13 +40,13 @@ func NewBuilder(listen string, manager string, p int) *Builder {
 	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	// Setup socket to listen to
 	list, err := net.Listen("tcp", listen)
 	if err != nil {
 		mgr.Close()
-		panic(err)
+		log.Panic(err)
 	}
 
 	// Build new builder
@@ -147,13 +147,13 @@ func (b *Builder) Shutdown() {
 func (b *Builder) Run() {
 	log.Println("Starting builder.")
 	b.Running = true
-
-	go b.StartPublisher()
+	// Start Listeners
 	go b.ManagerListener()
 	go b.SocketListener()
-
+	// Start Heartbeat
+	go b.StartPublisher()
+	// Wait for a halt signal
 	<-b.Halt
-
 	log.Println("Shutting down builder.")
 	b.Running = false
 	b.list.Close()
@@ -210,26 +210,36 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 	return i, nil
 }
 
+// Handles all, but handshake message types
+func (b *Builder) HandleMessage(i interface{}) {
+	switch messType := i.(type) {
+	case *rmake.RequiredFileMessage:
+		log.Println("Recieved required file.")
+		//Get a file from another node
+		//mes.Payload.Save(path.Join("builds", mes.Session))
+	case *rmake.BuilderRequest:
+		log.Println("Recieved builder request.")
+		//b.RunJob(mes)
+	default:
+		log.Println("Recieved invalid message type. Type: ", messType)
+	}
+}
+
+// Handles a connection from the listener
+// This could come from another builder.
+// Possibly from the manager too, but most likely another builder.
 func (b *Builder) HandleConnection(con net.Conn) {
 	log.Printf("Handling new connection from %s\n", con.RemoteAddr().String())
 	dec := gob.NewDecoder(con)
-
 	var i interface{}
-	for {
-		err := dec.Decode(&i)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		switch mes := i.(type) {
-		case *rmake.RequiredFileMessage:
-			//Get a file from another node
-			mes.Payload.Save(path.Join("builds", mes.Session))
-		case *rmake.BuilderRequest:
-			log.Println("Got a builder request!")
-			b.RunJob(mes)
-		}
+	err := dec.Decode(&i)
+	if err != nil {
+		log.Println(err)
+		return
 	}
+	b.HandleMessage(i)
+	// We'll only handle one message ber connection
+	con.Close()
 }
 
 func (b *Builder) SendStatusUpdate() error {
@@ -267,7 +277,7 @@ func (b *Builder) DoHandshake() {
 
 	host, err := os.Hostname()
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	announcement := rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
@@ -276,7 +286,7 @@ func (b *Builder) DoHandshake() {
 
 	inter, err := b.RecieveFromManager()
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	var ack *rmake.ManagerAcknowledge
@@ -286,7 +296,7 @@ func (b *Builder) DoHandshake() {
 		break
 	default:
 		log.Println("Recieved unknown type.")
-		panic(errors.New("Error, recieved unexpected type in handshake.\n"))
+		log.Panic(errors.New("Error, recieved unexpected type in handshake.\n"))
 	}
 
 	if ack.Success {
