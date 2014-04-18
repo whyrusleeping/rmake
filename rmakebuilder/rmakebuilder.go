@@ -32,6 +32,7 @@ type Builder struct {
 	Procs int
 	UUID  int
 	//Job Queue TODO: use this?
+	Halt   chan int
 	JQueue chan *rmake.Job
 }
 
@@ -58,6 +59,7 @@ func NewBuilder(listen string, manager string, p int) *Builder {
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
 	b.UpdateFrequency = time.Second * 15
+	b.Halt = make(chan int)
 	b.mgrReconnect = make(chan struct{})
 	fmt.Println("Final test")
 	return b
@@ -141,8 +143,6 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 func (b *Builder) Stop() {
 	log.Println("Shutting down builder.")
 	b.Running = false
-	//b.wri.Close()
-	//b.rea.Close()
 	b.list.Close()
 	b.manager.Close()
 }
@@ -152,7 +152,17 @@ func (b *Builder) Start() {
 	b.Running = true
 
 	go b.StartPublisher()
+	go b.ManagerListener()
+	go b.SocketListener()
 
+	<-b.Halt
+}
+
+func (b *Builder) ManagerListener() {
+
+}
+
+func (b *Builder) SocketListener() {
 	for {
 		con, err := b.list.Accept()
 		if err != nil {
