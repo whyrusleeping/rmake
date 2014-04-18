@@ -140,14 +140,11 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Job for session '%s' finished.\n", req.Session)
 }
 
-func (b *Builder) Stop() {
-	log.Println("Shutting down builder.")
-	b.Running = false
-	b.list.Close()
-	b.manager.Close()
+func (b *Builder) Shutdown() {
+
 }
 
-func (b *Builder) Start() {
+func (b *Builder) Run() {
 	log.Println("Starting builder.")
 	b.Running = true
 
@@ -156,10 +153,24 @@ func (b *Builder) Start() {
 	go b.SocketListener()
 
 	<-b.Halt
+
+	log.Println("Shutting down builder.")
+	b.Running = false
+	b.list.Close()
+	b.manager.Close()
 }
 
 func (b *Builder) ManagerListener() {
+	for {
+		err, i := b.RecieveFromManager()
+		if err != nil {
+			log.Println(err)
+		} else {
+			switch i.(type) {
 
+			}
+		}
+	}
 }
 
 func (b *Builder) SocketListener() {
@@ -308,5 +319,5 @@ func main() {
 	// Handshake with the manager
 	b.DoHandshake()
 	// Start the builder
-	b.Start()
+	b.Run()
 }
