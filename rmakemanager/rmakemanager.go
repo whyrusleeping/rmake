@@ -17,6 +17,7 @@ type Manager struct {
 	putUuid chan int
 	bcMap   map[int]*BuilderConnection
 	list    net.Listener
+	queue	*BuilderQueue
 }
 
 // Builder Connection Type
@@ -37,6 +38,8 @@ type BuilderConnection struct {
 	enc *gob.Encoder
 	// The gob decoder
 	dec *gob.Decoder
+	// Index in the priority queue
+	Index int
 }
 
 // Sets up a new builder connection
@@ -52,6 +55,10 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
 	return bc
+}
+
+func (b *BuilderConnection) H() int {
+	return b.NumJobs
 }
 
 //
@@ -154,7 +161,18 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 }
 
 func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.BuilderStatusUpdate) {
+	//Get current heuristic
+	cur := b.H()
 
+	//Update values
+	b.NumJobs = bsu.QueuedJobs
+	//...
+
+	if b.H() > cur {
+		m.queue.percDown(b.Index)
+	} else if b.H() < cur {
+		m.queue.percUp(b.Index)
+	}
 }
 
 // goroutine to handle a new connection from a client.

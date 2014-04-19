@@ -11,13 +11,14 @@ func NewBuilderQueue() *BuilderQueue {
 	q := new(BuilderQueue)
 	q.arr = make([]*BuilderConnection, 1)
 	q.cmp = func (a *BuilderConnection, b *BuilderConnection) bool {
-		return a.NumJobs > b.NumJobs
+		return a.H() > b.H()
 	}
 	return q
 }
 
 func (q *BuilderQueue) Push(bc *BuilderConnection) {
 	i := len(q.arr)
+	bc.Index = i
 	q.arr = append(q.arr, bc)
 	q.percUp(i)
 }
@@ -25,6 +26,7 @@ func (q *BuilderQueue) Push(bc *BuilderConnection) {
 func (q *BuilderQueue) Pop() *BuilderConnection {
 	ret := q.arr[1]
 	q.arr[1] = q.arr[len(q.arr) - 1]
+	q.arr[1].Index = 1
 	q.arr = q.arr[:len(q.arr) - 1]
 	q.percDown(1)
 	return ret
@@ -41,12 +43,18 @@ func (q *BuilderQueue) Len() int {
 func (q *BuilderQueue) percUp(from int) {
 	for from > 1 {
 		if q.cmp(q.arr[from/2], q.arr[from]) {
-			q.arr[from/2],q.arr[from] = q.arr[from],q.arr[from/2]
+			q.Swap(from/2, from)
 			from /= 2
 		} else {
 			break
 		}
 	}
+}
+
+func (q *BuilderQueue) Swap(i, j int) {
+	q.arr[i], q.arr[j] = q.arr[j], q.arr[i]
+	q.arr[i].Index = i
+	q.arr[j].Index = j
 }
 
 func (q *BuilderQueue) percDown(from int) {
@@ -56,21 +64,21 @@ func (q *BuilderQueue) percDown(from int) {
 		if from*2+1 < len(q.arr) {
 			if q.cmp(q.arr[from], q.arr[left]) {
 				if q.cmp(q.arr[left], q.arr[right]) {
-						q.arr[from],q.arr[right] = q.arr[right],q.arr[from]
+						q.Swap(from, right)
 						from = right
 				} else {
-					q.arr[from],q.arr[left] = q.arr[left],q.arr[from]
+					q.Swap(from, left)
 					from = left
 				}
 			} else if q.cmp(q.arr[from], q.arr[right]) {
-				q.arr[from],q.arr[right] = q.arr[right],q.arr[from]
+				q.Swap(from, right)
 				from = right
 			} else {
 				return
 			}
 		} else {
 			if q.cmp(q.arr[from], q.arr[left]) {
-				q.arr[from],q.arr[left] = q.arr[left],q.arr[from]
+				q.Swap(from, left)
 				from = left
 			} else {
 				return
@@ -78,3 +86,5 @@ func (q *BuilderQueue) percDown(from int) {
 		}
 	}
 }
+
+
