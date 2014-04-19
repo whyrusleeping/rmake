@@ -19,9 +19,9 @@ func TestUpdates(t *testing.T) {
 
 	var b *Builder
 	go func() {
-		b = NewBuilder(":12345", "localhost:12344")
+		b = NewBuilder(":12345", "localhost:12344", 2)
 		b.UpdateFrequency = time.Millisecond
-		b.Start(2)
+		b.Run()
 	}()
 
 	con,err := mgr.Accept()
@@ -38,7 +38,7 @@ func TestUpdates(t *testing.T) {
 			panic(err)
 		}
 		switch i := i.(type) {
-		case *rmake.BuilderInfoMessage:
+		case *rmake.BuilderStatusUpdate:
 			/*
 			fmt.Println("Got update message!")
 			fmt.Printf("Queued Jobs: %d\n", i.QueuedJobs)
@@ -67,8 +67,9 @@ func TestBuild(t *testing.T) {
 	}
 
 	go func() {
-		b := NewBuilder(":12335", "localhost:12334")
-		b.Start(2)
+		//Setup builder
+		b := NewBuilder(":12335", "localhost:12334",2)
+		b.Run()
 	}()
 
 	go func() {
@@ -104,6 +105,8 @@ func TestBuild(t *testing.T) {
 		panic(err)
 	}
 
+	fmt.Println("Got builder connection!")
+
 	var i interface{}
 	dec := gob.NewDecoder(con)
 	recv := 0
@@ -116,7 +119,7 @@ func TestBuild(t *testing.T) {
 			panic(err)
 		}
 		switch i := i.(type) {
-		case *rmake.BuilderInfoMessage:
+		case *rmake.BuilderStatusUpdate:
 			fmt.Println(i)
 		case *rmake.BuildFinishedMessage:
 			fmt.Println("Build Finished Message!")
@@ -139,14 +142,14 @@ func TestHandshake(t *testing.T) {
 		panic(err)
 	}
 
-	success := false
+	success := make(chan struct{})
 	go func() {
-		b := NewBuilder(":12341", "localhost:12340")
-		err := b.DoHandshake()
+		b := NewBuilder(":12341", "localhost:12340",2)
+		b.DoHandshake()
 		if err != nil {
 			panic(err)
 		}
-		success = true
+		success <- struct{}{}
 		b.Stop()
 	}()
 
@@ -166,14 +169,10 @@ func TestHandshake(t *testing.T) {
 		}
 		err := dec.Decode(&i)
 		if err != nil {
-			if !success {
-				panic(err)
-			} else {
-				return
-			}
+			panic(err)
 		}
 		switch i := i.(type) {
-		case *rmake.BuilderInfoMessage:
+		case *rmake.BuilderStatusUpdate:
 			fmt.Println(i)
 		case *rmake.BuildFinishedMessage:
 			fmt.Println("Build Finished Message!")
@@ -186,15 +185,18 @@ func TestHandshake(t *testing.T) {
 			fmt.Printf("Recieved Announcement from %s\n", i.Hostname)
 			ack := new(rmake.ManagerAcknowledge)
 			ack.UUID = 6
+			ack.Success = true
 			var inter interface{}
 			inter = ack
 			err := enc.Encode(&inter)
 			if err != nil {
 				panic(err)
 			}
+			<-success
+			os.RemoveAll("builds")
+			return
 		default:
 			fmt.Println("Unrecognized Message.")
 		}
 	}
-	os.RemoveAll("builds")
 }

@@ -32,11 +32,11 @@ type Builder struct {
 	Procs int
 	UUID  int
 	//Job Queue TODO: use this?
-	Halt   chan int
+	Halt   chan struct{}
 	JQueue chan *rmake.Job
 }
 
-func NewBuilder(listen string, manager string, p int) *Builder {
+func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
@@ -52,14 +52,14 @@ func NewBuilder(listen string, manager string, p int) *Builder {
 	// Build new builder
 	b := new(Builder)
 	b.list = list
-	b.Procs = p
+	b.Procs = nprocs
 	b.ListenerAddr = listen
 	b.ManagerAddr = manager
 	b.manager = mgr
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
 	b.UpdateFrequency = time.Second * 15
-	b.Halt = make(chan int)
+	b.Halt = make(chan struct{})
 	b.mgrReconnect = make(chan struct{})
 	return b
 }
@@ -147,12 +147,17 @@ func (b *Builder) Run() {
 	go b.SocketListener()
 	// Start Heartbeat
 	go b.StartPublisher()
-	// Wait for a halt signal
+
 	<-b.Halt
+
 	log.Println("Shutting down builder.")
 	b.Running = false
 	b.list.Close()
 	b.manager.Close()
+}
+
+func (b *Builder) Stop() {
+	b.Halt <- struct{}{}
 }
 
 func (b *Builder) ManagerListener() {
@@ -207,23 +212,20 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 
 // Handles all, but handshake message types
 func (b *Builder) HandleMessage(i interface{}) {
-	switch messType := i.(type) {
+	switch message := i.(type) {
 	// Wat?
 	case *rmake.RequiredFileMessage:
 		log.Println("Recieved required file.")
 		//Get a file from another node
-		//mes.Payload.Save(path.Join("builds", mes.Session))
-
-	// Wat wat?
-	case *rmake.BuilderResult:
-		log.Println("Recieved builder result.")
+		message.Payload.Save(path.Join("builds", message.Session))
 
 	// Job Request
 	case *rmake.BuilderRequest:
 		log.Println("Recieved builder request.")
-		//b.RunJob(mes)
+		b.RunJob(message)
+
 	default:
-		log.Println("Recieved invalid message type. Type: ", messType)
+		log.Println("Recieved invalid message type.")
 	}
 }
 
@@ -292,10 +294,9 @@ func (b *Builder) DoHandshake() {
 	}
 
 	var ack *rmake.ManagerAcknowledge
-	switch inter.(type) {
+	switch inter := inter.(type) {
 	case *rmake.ManagerAcknowledge:
-		ack = inter.(*rmake.ManagerAcknowledge)
-		break
+		ack = inter
 	default:
 		log.Panic(errors.New("Error, recieved unexpected type in handshake.\n"))
 	}
