@@ -24,7 +24,7 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	for _, v := range conf.Files {
 		f := rmake.LoadFile(v.Path)
 		if f != nil {
-			p.Files = append(p.Files, f)
+			p.Files[v.Path] = f
 		}
 	}
 	return p

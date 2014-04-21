@@ -127,6 +127,45 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 	// handle the request
 
 	fmt.Println("TODO: do the build??")
+
+	final := m.queue.Pop()
+	final.NumJobs++
+	m.queue.Push(final)
+
+	var finaljob *rmake.Job
+	for _,j := range request.Jobs {
+		if request.Output == j.Output {
+			finaljob = j
+		}
+	}
+
+
+
+	for _,j := range request.Jobs {
+		if j == finaljob {
+			continue
+		}
+		br := new(rmake.BuilderRequest)
+		br.BuildJob = j
+
+		br.Session = "GET A SESSION!"
+
+		br.ResultAddress = final.Hostname
+
+		for _,dep := range j.Deps {
+			depfi, ok := request.Files[dep]
+			if !ok {
+				fmt.Printf("Builder will need to wait on %s\n", dep)
+				br.Wait = append(br.Wait, dep)
+			} else {
+				br.Input = append(br.Input, depfi)
+			}
+		}
+
+		builder := m.queue.Pop()
+		fmt.Println("Sending job to '%s'\n", builder.Hostname)
+		builder.Send(br)
+	}
 	// So do we want to keep a line open for the FinalBuildResult?
 	// Or do we want a handler for that too?
 	// Questions for tomorrow.

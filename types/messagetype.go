@@ -78,11 +78,21 @@ type BuilderRequest struct {
 	BuildJob *Job
 
 	Input []*File
+	Wait []string
 	//The address of the node to send the output to
 	//empty string means keep it local
 	ResultAddress string
 	//
 	Session string
+}
+
+func (br *BuilderRequest) GetFile(fi string) *File {
+	for _,f := range br.Input {
+		if f.Path == fi {
+			return f
+		}
+	}
+	return nil
 }
 
 //A response from a builder who has finished a job
@@ -115,8 +125,11 @@ type ManagerRequest struct {
 	//
 	OS string
 
+	//The file that we are expecting to be built
+	Output string
+
 	//Files to be transferred
-	Files []*File
+	Files map[string]*File
 }
 
 //A message to indicate to the client the build status
