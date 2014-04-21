@@ -87,4 +87,8 @@ func (q *BuilderQueue) percDown(from int) {
 	}
 }
 
-
+func (q *BuilderQueue) Remove(i int) {
+	q.arr[i] = q.arr[len(q.arr) - 1]
+	q.arr = q.arr[:len(q.arr) - 1]
+	q.percDown(i)
+}

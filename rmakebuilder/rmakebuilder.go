@@ -40,7 +40,9 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
+		log.Println("Could not connect to manager.")
+		return nil
 	}
 	// Setup socket to listen to
 	list, err := net.Listen("tcp", listen)
@@ -325,11 +327,13 @@ func main() {
 	// Avaliable processors
 	flag.IntVar(&procs, "p", 2, "Number of processors to use.")
 	flag.Parse()
+	flag.PrintDefaults()
 
 	fmt.Println("rmakebuilder")
-	b := NewBuilder(listname, manager, procs)
-	// Handshake with the manager
-	b.DoHandshake()
-	// Start the builder
-	b.Run()
+	if b := NewBuilder(listname, manager, procs); b != nil {
+		// Handshake with the manager
+		b.DoHandshake()
+		// Start the builder
+		b.Run()
+	}
 }

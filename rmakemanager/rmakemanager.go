@@ -126,6 +126,7 @@ func (m *Manager) UUIDGenerator() {
 func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 	// handle the request
 
+	fmt.Println("TODO: do the build??")
 	// So do we want to keep a line open for the FinalBuildResult?
 	// Or do we want a handler for that too?
 	// Questions for tomorrow.
@@ -181,29 +182,26 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
 
-	/*
-		unzip, err := gzip.NewReader(c)
-		if err != nil {
-			return
-		}*/
 
 	dec := gob.NewDecoder(c)
 	err := dec.Decode(&gobint)
 	if err != nil {
 		fmt.Println(err)
+		panic(err)
 		return
 	}
 
-	switch gobtype := gobint.(type) {
+	switch message := gobint.(type) {
 	case *rmake.BuilderResult:
-		fmt.Printf("Builder Result: %d\n", gobtype)
+		fmt.Println("Builder Result")
 	case *rmake.ManagerRequest:
-		fmt.Printf("Manager Request: %d\n", gobtype)
+		fmt.Println("Manager Request")
+		m.HandleManagerRequest(message)
 	case *rmake.BuilderAnnouncement:
-		fmt.Printf("Builder Announcement: %d\n", gobtype)
-		m.HandleBuilderAnnouncement(gobint.(*rmake.BuilderAnnouncement), c)
+		fmt.Println("Builder Announcement")
+		m.HandleBuilderAnnouncement(message, c)
 	default:
-		fmt.Printf("Unknown Type.\n", gobtype)
+		fmt.Println("Unknown Type.\n")
 	}
 
 	return

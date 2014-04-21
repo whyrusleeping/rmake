@@ -2,12 +2,10 @@ package main
 
 import (
 	"bufio"
-	"compress/gzip"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -166,30 +164,27 @@ func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
 	var gobint interface{}
 	var fbr *rmake.FinalBuildResult
 
-	unzip, err := gzip.NewReader(c)
-	if err != nil {
-		return nil, err
-	}
-	dec := gob.NewDecoder(unzip)
+	dec := gob.NewDecoder(c)
 
 	// Wait till we have what we want
 	for fbr == nil {
 		// Decode some data
-		err = dec.Decode(&gobint)
+		err := dec.Decode(&gobint)
 		if err != nil {
 			fmt.Println(err)
 			//return nil, err // I don't think we want to simply die...
+			panic(err)
 		}
 		// Found some data, grab the type...
-		switch gobtype := gobint.(type) {
+		switch message := gobint.(type) {
 		case *rmake.BuildStatus:
-			fmt.Printf("Build Status: %d\n", gobtype)
-			//PrintBuildStatus((*rmake.BuildStatus)(gobint)) // Doesn't work for some reason
+			fmt.Println("Build Status")
+			PrintBuildStatus(message) // Doesn't work for some reason
 		case *rmake.FinalBuildResult:
-			fmt.Printf("Final Build Result: %d\n", gobtype)
-			fbr = (*rmake.FinalBuildResult)(gobtype)
+			fmt.Println("Final Build Result")
+			fbr = message
 		default:
-			fmt.Printf("Unknown Type.\n", gobtype)
+			fmt.Println("Unknown Type.")
 		}
 	}
 
@@ -207,14 +202,12 @@ func (rmc *RMakeConf) DoBuild() error {
 		return err
 	}
 	defer con.Close()
-	zipp := rmc.Gzipper(con)
-	enc := gob.NewEncoder(zipp)
+	enc := gob.NewEncoder(con)
 	err = enc.Encode(&inter)
 	if err != nil {
 		return err
 	}
 	//Make sure all data gets flushed through
-	zipp.Close()
 
 	// Wait for the result
 	var fbr *rmake.FinalBuildResult
@@ -234,6 +227,7 @@ func (rmc *RMakeConf) DoBuild() error {
 	return nil
 }
 
+/*
 //Wrap the given writer in a gzip layer
 //level of compression specified in config
 func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
@@ -252,6 +246,7 @@ func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
 	}
 	return zipper
 }
+*/
 
 func LoadRMakeConf(file string) (*RMakeConf, error) {
 	fi, err := os.Open(file)
