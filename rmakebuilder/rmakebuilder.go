@@ -102,6 +102,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 
 	if req.ResultAddress == "" {
+		//Actually... shouldnt happen
 		log.Println("Im the final node! no need to send.")
 		return
 	}

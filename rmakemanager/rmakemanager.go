@@ -123,24 +123,41 @@ func (m *Manager) UUIDGenerator() {
 }
 
 // Allocate resources to the request
+//TODO: time this and other handlers for performance analytics
 func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 	// handle the request
 
-	fmt.Println("TODO: do the build??")
-
+	//Take the freest node as the final node
 	final := m.queue.Pop()
 	final.NumJobs++
 	m.queue.Push(final)
 
+	//Find the 'final' job in our list
 	var finaljob *rmake.Job
 	for _,j := range request.Jobs {
 		if request.Output == j.Output {
 			finaljob = j
 		}
 	}
+	br := new(rmake.BuilderRequest)
+	br.BuildJob = finaljob
+	br.Session = "GET A SESSION!" //TODO: method of creating and tracking sessions?
+	br.ResultAddress = "manager" //Key string, recognized by builder
+	for _,dep := range j.Deps {
+		depfi, ok := request.Files[dep]
+		if !ok {
+			fmt.Printf("final builder will need to wait on %s\n", dep)
+			br.Wait = append(br.Wait, dep)
+		} else {
+			br.Input = append(br.Input, depfi)
+		}
+	}
+
+	fmt.Println("Sending job to '%s'\n", builder.Hostname)
+	final.Send(br)
 
 
-
+	//assign each job to a builder
 	for _,j := range request.Jobs {
 		if j == finaljob {
 			continue
@@ -165,10 +182,9 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		builder := m.queue.Pop()
 		fmt.Println("Sending job to '%s'\n", builder.Hostname)
 		builder.Send(br)
+		builder.NumJobs++
+		m.queue.Push(builder)
 	}
-	// So do we want to keep a line open for the FinalBuildResult?
-	// Or do we want a handler for that too?
-	// Questions for tomorrow.
 }
 
 //
