@@ -1,12 +1,14 @@
 package main
 
 import (
-	"compress/gzip"
-	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
 	"net"
+	"compress/gzip"
+	"encoding/gob"
+	"encoding/base64"
+	"crypto/rand"
 
 	"github.com/whyrusleeping/rmake/types"
 )
@@ -18,72 +20,9 @@ type Manager struct {
 	bcMap   map[int]*BuilderConnection
 	list    net.Listener
 	queue	*BuilderQueue
+	sessions map[string]bool
 }
 
-// Builder Connection Type
-type BuilderConnection struct {
-	// The builder's uuid
-	UUID int
-	// The builder's hostname
-	Hostname string
-	// The listening address
-	ListenerAddr string
-	// The backing network connection
-	conn net.Conn
-	// The current number of jobs
-	NumJobs int
-	// The managing manager
-	Manager *Manager
-	// The gob encoder
-	enc *gob.Encoder
-	// The gob decoder
-	dec *gob.Decoder
-	// Index in the priority queue
-	Index int
-}
-
-// Sets up a new builder connection
-func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager) *BuilderConnection {
-	// Build bulder connection
-	bc := new(BuilderConnection)
-	bc.UUID = uuid
-	bc.Hostname = hn
-	bc.ListenerAddr = la
-	bc.conn = c
-	bc.NumJobs = 0
-	bc.Manager = m
-	bc.enc = gob.NewEncoder(c)
-	bc.dec = gob.NewDecoder(c)
-	return bc
-}
-
-func (b *BuilderConnection) H() int {
-	return b.NumJobs
-}
-
-//
-func (b *BuilderConnection) Send(i interface{}) error {
-	err := b.enc.Encode(&i)
-	if err != nil {
-		return err
-	}
-	//b.wri.Flush()
-	return nil
-}
-
-func (b *BuilderConnection) HandleStatusUpdate(bsu *rmake.BuilderStatusUpdate) {
-	b.Manager.HandleBuilderStatusUpdate(b, bsu)
-}
-
-//
-func (b *BuilderConnection) Recieve() (interface{}, error) {
-	var i interface{}
-	err := b.dec.Decode(&i)
-	if err != nil {
-		return nil, err
-	}
-	return i, nil
-}
 
 // Make a new manager
 func NewManager(listname string) *Manager {
@@ -96,6 +35,7 @@ func NewManager(listname string) *Manager {
 	m.getUuid = make(chan int)
 	m.putUuid = make(chan int)
 	m.bcMap = make(map[int]*BuilderConnection)
+	m.sessions = make(map[string]bool)
 	m.list = list
 	go m.UUIDGenerator()
 	return m
@@ -122,6 +62,19 @@ func (m *Manager) UUIDGenerator() {
 	}
 }
 
+func (m *Manager) GetNewSession() string {
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	session := base64.StdEncoding.EncodeToString(bytes)
+	fmt.Printf("Made new session: %s\n", session)
+	m.sessions[session] = true
+	return session
+}
+
+func (m *Manager) ReleaseSession(session string) {
+
+}
+
 // Allocate resources to the request
 //TODO: time this and other handlers for performance analytics
 func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
@@ -143,7 +96,8 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 	br.BuildJob = finaljob
 	br.Session = "GET A SESSION!" //TODO: method of creating and tracking sessions?
 	br.ResultAddress = "manager" //Key string, recognized by builder
-	for _,dep := range j.Deps {
+
+	for _,dep := range finaljob.Deps {
 		depfi, ok := request.Files[dep]
 		if !ok {
 			fmt.Printf("final builder will need to wait on %s\n", dep)
@@ -153,7 +107,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		}
 	}
 
-	fmt.Println("Sending job to '%s'\n", builder.Hostname)
+	fmt.Println("Sending job to '%s'\n", final.Hostname)
 	final.Send(br)
 
 
