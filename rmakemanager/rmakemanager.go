@@ -27,6 +27,7 @@ type Manager struct {
 // Make a new manager
 func NewManager(listname string) *Manager {
 	//Start the server socket
+	log.Printf("Listening on '%s'\n", listname)
 	list, err := net.Listen("tcp", listname)
 	if err != nil {
 		log.Panic(err)
@@ -36,6 +37,7 @@ func NewManager(listname string) *Manager {
 	m.putUuid = make(chan int)
 	m.bcMap = make(map[int]*BuilderConnection)
 	m.sessions = make(map[string]bool)
+	m.queue = NewBuilderQueue()
 	m.list = list
 	go m.UUIDGenerator()
 	return m
@@ -54,7 +56,7 @@ func (m *Manager) UUIDGenerator() {
 			} else {
 				maxUuid++
 				nextUuid = maxUuid
-				fmt.Println("Setting next UUID to: %d\n", nextUuid)
+				fmt.Printf("Setting next UUID to: %d\n", nextUuid)
 			}
 		case id := <-m.putUuid:
 			free = append(free, id)
@@ -92,9 +94,13 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 			finaljob = j
 		}
 	}
+	if finaljob == nil {
+		fmt.Println("I have no idea what to do.")
+		panic("confusion?!")
+	}
 	br := new(rmake.BuilderRequest)
 	br.BuildJob = finaljob
-	br.Session = "GET A SESSION!" //TODO: method of creating and tracking sessions?
+	br.Session = "SESSIONSTANDIN" //TODO: method of creating and tracking sessions?
 	br.ResultAddress = "manager" //Key string, recognized by builder
 
 	for _,dep := range finaljob.Deps {
@@ -107,7 +113,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		}
 	}
 
-	fmt.Println("Sending job to '%s'\n", final.Hostname)
+	fmt.Printf("Sending job to '%s'\n", final.Hostname)
 	final.Send(br)
 
 
@@ -119,8 +125,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		br := new(rmake.BuilderRequest)
 		br.BuildJob = j
 
-		br.Session = "GET A SESSION!"
-
+		br.Session = "SESSIONSTANDIN"
 		br.ResultAddress = final.Hostname
 
 		for _,dep := range j.Deps {
@@ -134,7 +139,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		}
 
 		builder := m.queue.Pop()
-		fmt.Println("Sending job to '%s'\n", builder.Hostname)
+		fmt.Printf("Sending job to '%s'\n", builder.Hostname)
 		builder.Send(br)
 		builder.NumJobs++
 		m.queue.Push(builder)
@@ -167,7 +172,9 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 	if errored {
 		fmt.Println("Errored, returning UUID")
 		m.putUuid <- uuid
+		return
 	}
+	m.queue.Push(bc)
 }
 
 func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.BuilderStatusUpdate) {

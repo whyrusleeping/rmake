@@ -27,6 +27,7 @@ type Builder struct {
 	UpdateFrequency time.Duration
 	Running         bool
 
+	incoming chan interface{}
 	mgrReconnect chan struct{}
 
 	Procs int
@@ -51,6 +52,9 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 		log.Panic(err)
 	}
 
+	//Make sure build directory exists
+	os.Mkdir("builds", 0777 | os.ModeDir)
+
 	// Build new builder
 	b := new(Builder)
 	b.list = list
@@ -60,6 +64,7 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.manager = mgr
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
+	b.incoming = make(chan interface{})
 	b.UpdateFrequency = time.Second * 15
 	b.Halt = make(chan struct{})
 	b.mgrReconnect = make(chan struct{})
@@ -69,6 +74,8 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
+	os.Mkdir(sdir, 0777 | os.ModeDir)
+
 	for _, f := range req.Input {
 		err := f.Save(sdir)
 		if err != nil {
@@ -113,7 +120,8 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		outEnc = b.enc
 	} else {
 		//Send to other builder
-		send, err := net.Dial("tcp", req.ResultAddress)
+		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
+		send, err := net.Dial("tcp", req.ResultAddress + ":11222")
 		if err != nil {
 			log.Println(err)
 			//TODO: decide what to do if this happens
@@ -148,6 +156,10 @@ func (b *Builder) Run() {
 	// Start Listeners
 	go b.ManagerListener()
 	go b.SocketListener()
+
+	// Start message handler
+	go b.HandleMessages()
+
 	// Start Heartbeat
 	go b.StartPublisher()
 
@@ -165,14 +177,20 @@ func (b *Builder) Stop() {
 
 func (b *Builder) ManagerListener() {
 	for {
-		err, i := b.RecieveFromManager()
+		mes, err := b.RecieveFromManager()
 		if err != nil {
 			log.Println(err)
-		} else {
-			switch i.(type) {
-
-			}
+			//TODO: switch on the error type and handle appropriately
+			panic(err)
 		}
+		b.incoming <- mes
+	}
+}
+
+func (b *Builder) HandleMessages() {
+	for {
+		m := <-b.incoming
+		b.HandleMessage(m)
 	}
 }
 
@@ -207,6 +225,7 @@ func (b *Builder) SendToManager(i interface{}) error {
 func (b *Builder) RecieveFromManager() (interface{}, error) {
 	var i interface{}
 	err := b.dec.Decode(&i)
+	fmt.Println("Recieve from manager.")
 	if err != nil {
 		return nil, err
 	}
@@ -216,13 +235,11 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 // Handles all, but handshake message types
 func (b *Builder) HandleMessage(i interface{}) {
 	switch message := i.(type) {
-	// Wat?
 	case *rmake.RequiredFileMessage:
 		log.Println("Recieved required file.")
 		//Get a file from another node
 		message.Payload.Save(path.Join("builds", message.Session))
 
-	// Job Request
 	case *rmake.BuilderRequest:
 		log.Println("Recieved builder request.")
 		b.RunJob(message)
@@ -244,8 +261,9 @@ func (b *Builder) HandleConnection(con net.Conn) {
 		log.Println(err)
 		return
 	}
-	b.HandleMessage(i)
+	//b.HandleMessage(i)
 	// We'll only handle one message ber connection
+	b.incoming <- i
 	con.Close()
 }
 
@@ -261,6 +279,7 @@ func (b *Builder) SendStatusUpdate() error {
 	err := b.SendToManager(stat)
 	if err != nil {
 		log.Println(err)
+		log.Println("I should attempt to reconnect!")
 		return err
 	}
 	return nil

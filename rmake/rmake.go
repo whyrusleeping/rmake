@@ -20,6 +20,7 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	p.Jobs = conf.Jobs
 	p.Arch = "Arch" //lol
 	p.OS = "Arch (the OS)"
+	p.Output = conf.Output
 
 	for _, v := range conf.Files {
 		f := rmake.LoadFile(v.Path)
@@ -278,7 +279,14 @@ func main() {
 	//Try and load default configuration
 	rmc, err := LoadRMakeConf("rmake.json")
 	if err != nil {
-		rmc = NewRMakeConf()
+		switch err.(type) {
+			case *os.PathError:
+				rmc = NewRMakeConf()
+			case *json.SyntaxError:
+				fmt.Println("Invalid Syntax:")
+				fmt.Println(err)
+				return
+		}
 	}
 
 	//If no args, perform a build
@@ -286,6 +294,7 @@ func main() {
 	if len(os.Args) == 1 {
 		err := rmc.DoBuild()
 		if err != nil {
+			fmt.Println("Do build errored!")
 			fmt.Println(err)
 		}
 		rmc.Save("rmake.json")
