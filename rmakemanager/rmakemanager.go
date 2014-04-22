@@ -2,18 +2,16 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"net"
 	"compress/gzip"
 	"encoding/gob"
-	"encoding/base64"
+	"encoding/hex"
 	"crypto/rand"
 
 	"reflect"
 
 	"github.com/whyrusleeping/rmake/types"
-	slog "github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 )
 
 // Main manager type, basically globals right now
@@ -23,7 +21,7 @@ type Manager struct {
 	bcMap   map[int]*BuilderConnection
 	list    net.Listener
 	queue	*BuilderQueue
-	sessions map[string]bool
+	sessions map[string]chan interface{}
 
 	//Messages coming in to the manager
 	Incoming chan interface{}
@@ -33,16 +31,17 @@ type Manager struct {
 // Make a new manager
 func NewManager(listname string) *Manager {
 	//Start the server socket
-	log.Printf("Listening on '%s'\n", listname)
+	log.Infof("Listening on '%s'\n", listname)
 	list, err := net.Listen("tcp", listname)
 	if err != nil {
-		log.Panic(err)
+		log.Error(err)
+		panic(err)
 	}
 	m := new(Manager)
 	m.getUuid = make(chan int)
 	m.putUuid = make(chan int)
 	m.bcMap = make(map[int]*BuilderConnection)
-	m.sessions = make(map[string]bool)
+	m.sessions = make(map[string]chan interface{})
 	m.queue = NewBuilderQueue()
 	m.list = list
 	m.Incoming = make(chan interface{})
@@ -56,17 +55,20 @@ func (m *Manager) MessageListener() {
 		mes := <-m.Incoming
 		switch mes := mes.(type) {
 			case *rmake.BuildStatus:
-				slog.Info("Build Status Update.")
-				slog.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
+				log.Info("Build Status Update.")
+				log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
 			case *rmake.BuilderResult:
-				slog.Info("Build finished! send this to the client!")
+				ch, ok := m.sessions[mes.Session]
+				if ok {
+					ch <- mes
+				}
 			case *rmake.BuildFinishedMessage:
-				slog.Info("Misleading type name, build not finished. just a job.")
+				log.Info("Misleading type name, build not finished yet. just a job.")
 			case *rmake.BuilderStatusUpdate:
-				slog.Info("Builder updated load")
+				log.Info("Builder updated load")
 			default:
-				slog.Warn("Unrecognized message type")
-				slog.Warn(reflect.TypeOf(mes))
+				log.Warn("Unrecognized message type")
+				log.Warn(reflect.TypeOf(mes))
 		}
 	}
 }
@@ -84,7 +86,7 @@ func (m *Manager) UUIDGenerator() {
 			} else {
 				maxUuid++
 				nextUuid = maxUuid
-				fmt.Printf("Setting next UUID to: %d\n", nextUuid)
+				log.Infof("Setting next UUID to: %d\n", nextUuid)
 			}
 		case id := <-m.putUuid:
 			free = append(free, id)
@@ -95,9 +97,9 @@ func (m *Manager) UUIDGenerator() {
 func (m *Manager) GetNewSession() string {
 	bytes := make([]byte, 8)
 	rand.Read(bytes)
-	session := base64.StdEncoding.EncodeToString(bytes)
-	fmt.Printf("Made new session: %s\n", session)
-	m.sessions[session] = true
+	session := hex.EncodeToString(bytes)
+	log.Infof("Made new session: %s\n", session)
+	m.sessions[session] = make(chan interface{})
 	return session
 }
 
@@ -107,7 +109,7 @@ func (m *Manager) ReleaseSession(session string) {
 
 // Allocate resources to the request
 //TODO: time this and other handlers for performance analytics
-func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
+func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, session string) {
 	// handle the request
 
 	//Take the freest node as the final node
@@ -123,25 +125,25 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		}
 	}
 	if finaljob == nil {
-		fmt.Println("I have no idea what to do.")
+		log.Error("I have no idea what to do.")
 		panic("confusion?!")
 	}
 	br := new(rmake.BuilderRequest)
 	br.BuildJob = finaljob
-	br.Session = "SESSIONSTANDIN" //TODO: method of creating and tracking sessions?
+	br.Session = session //TODO: method of creating and tracking sessions?
 	br.ResultAddress = "manager" //Key string, recognized by builder
 
 	for _,dep := range finaljob.Deps {
 		depfi, ok := request.Files[dep]
 		if !ok {
-			fmt.Printf("final builder will need to wait on %s\n", dep)
+			log.Infof("final builder will need to wait on %s\n", dep)
 			br.Wait = append(br.Wait, dep)
 		} else {
 			br.Input = append(br.Input, depfi)
 		}
 	}
 
-	fmt.Printf("Sending job to '%s'\n", final.Hostname)
+	log.Infof("Sending job to '%s'\n", final.Hostname)
 	final.Send(br)
 
 
@@ -153,13 +155,13 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		br := new(rmake.BuilderRequest)
 		br.BuildJob = j
 
-		br.Session = "SESSIONSTANDIN"
+		br.Session = session
 		br.ResultAddress = final.Hostname
 
 		for _,dep := range j.Deps {
 			depfi, ok := request.Files[dep]
 			if !ok {
-				fmt.Printf("Builder will need to wait on %s\n", dep)
+				log.Infof("Builder will need to wait on %s\n", dep)
 				br.Wait = append(br.Wait, dep)
 			} else {
 				br.Input = append(br.Input, depfi)
@@ -167,7 +169,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 		}
 
 		builder := m.queue.Pop()
-		fmt.Printf("Sending job to '%s'\n", builder.Hostname)
+		log.Infof("Sending job to '%s'\n", builder.Hostname)
 		builder.Send(br)
 		builder.NumJobs++
 		m.queue.Push(builder)
@@ -176,7 +178,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest) {
 
 //
 func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con net.Conn) {
-	fmt.Println("Handling announcement")
+	log.Info("Handling announcement")
 	var ack *rmake.ManagerAcknowledge
 	// Make the new builder connection
 	errored := false
@@ -194,11 +196,11 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 	// Send off the ack
 	err := bc.Send(ack)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 	}
 	// If we errored above, free the uuid
 	if errored {
-		fmt.Println("Errored, returning UUID")
+		log.Error("Errored, returning UUID")
 		m.putUuid <- uuid
 		return
 	}
@@ -227,27 +229,33 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
 
-	fmt.Println("SHOULD ONLY BE CLIENT CONNECTION!")
+	log.Info("SHOULD ONLY BE CLIENT CONNECTION!")
 
 	dec := gob.NewDecoder(c)
 	err := dec.Decode(&gobint)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
 		panic(err)
-		return
 	}
 
+	session := m.GetNewSession()
+
 	switch message := gobint.(type) {
-	case *rmake.BuilderResult:
-		fmt.Println("Builder Result")
 	case *rmake.ManagerRequest:
-		fmt.Println("Manager Request")
-		m.HandleManagerRequest(message)
-	case *rmake.BuilderAnnouncement:
-		fmt.Println("Builder Announcement")
-		m.HandleBuilderAnnouncement(message, c)
+		log.Info("Manager Request")
+		m.HandleManagerRequest(message, session)
 	default:
-		fmt.Println("Unknown Type.\n")
+		log.Info("Unknown Type.")
+	}
+
+	enc := gob.NewEncoder(c)
+	for {
+		mes := <-m.sessions[session]
+		err := enc.Encode(&mes)
+		if err != nil {
+			log.Warn(err)
+			return
+		}
 	}
 
 	return
@@ -255,7 +263,7 @@ func (m *Manager) HandleConnection(c net.Conn) {
 
 func (m *Manager) Reply(i interface{}, addr string) error {
 
-	fmt.Println("Replying to %s\n", addr)
+	log.Infof("Replying to %s\n", addr)
 
 	mgr, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -279,7 +287,7 @@ func (m *Manager) Start() {
 	for {
 		con, err := m.list.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err)
 			continue
 		}
 		//Handle clients in separate 'thread'
@@ -299,7 +307,7 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Println("rmakemanager\n")
+	log.Info("rmakemanager")
 
 	manager := NewManager(listname)
 	manager.Start()
