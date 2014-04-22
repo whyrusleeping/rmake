@@ -10,7 +10,10 @@ import (
 	"encoding/base64"
 	"crypto/rand"
 
+	"reflect"
+
 	"github.com/whyrusleeping/rmake/types"
+	slog "github.com/cihub/seelog"
 )
 
 // Main manager type, basically globals right now
@@ -21,6 +24,9 @@ type Manager struct {
 	list    net.Listener
 	queue	*BuilderQueue
 	sessions map[string]bool
+
+	//Messages coming in to the manager
+	Incoming chan interface{}
 }
 
 
@@ -39,8 +45,30 @@ func NewManager(listname string) *Manager {
 	m.sessions = make(map[string]bool)
 	m.queue = NewBuilderQueue()
 	m.list = list
+	m.Incoming = make(chan interface{})
 	go m.UUIDGenerator()
+	go m.MessageListener()
 	return m
+}
+
+func (m *Manager) MessageListener() {
+	for {
+		mes := <-m.Incoming
+		switch mes := mes.(type) {
+			case *rmake.BuildStatus:
+				slog.Info("Build Status Update.")
+				slog.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
+			case *rmake.BuilderResult:
+				slog.Info("Build finished! send this to the client!")
+			case *rmake.BuildFinishedMessage:
+				slog.Info("Misleading type name, build not finished. just a job.")
+			case *rmake.BuilderStatusUpdate:
+				slog.Info("Builder updated load")
+			default:
+				slog.Warn("Unrecognized message type")
+				slog.Warn(reflect.TypeOf(mes))
+		}
+	}
 }
 
 func (m *Manager) UUIDGenerator() {
@@ -174,6 +202,7 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 		m.putUuid <- uuid
 		return
 	}
+	go bc.Listen()
 	m.queue.Push(bc)
 }
 
@@ -198,6 +227,7 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
 
+	fmt.Println("SHOULD ONLY BE CLIENT CONNECTION!")
 
 	dec := gob.NewDecoder(c)
 	err := dec.Decode(&gobint)

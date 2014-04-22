@@ -52,14 +52,20 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	bc.Hostname = strings.Split(addr, ":")[0]
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
-	bc.Incoming = make(chan interface{})
 	bc.Outgoing = make(chan interface{})
+	bc.Incoming = m.Incoming
 	return bc
 }
 
 func (b *BuilderConnection) Listen() {
 	go func () {
-
+		for {
+			i := <-b.Outgoing
+			err := b.enc.Encode(&i)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}()
 	var i interface{}
 	for {
@@ -68,7 +74,8 @@ func (b *BuilderConnection) Listen() {
 			slog.Critical(err)
 			return
 		}
-
+		slog.Info("Builder recieved message.")
+		b.Incoming <- i
 	}
 }
 

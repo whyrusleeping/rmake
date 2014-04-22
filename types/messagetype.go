@@ -139,6 +139,8 @@ type BuildStatus struct {
 	Message string
 	// The percent complete
 	PercentComplete float32
+
+	Session string
 }
 
 //The final message sent back from the manager after the build is done

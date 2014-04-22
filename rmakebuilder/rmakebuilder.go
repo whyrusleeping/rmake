@@ -103,6 +103,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		resp.Error = err.Error()
 		resp.Success = false
 	}
+	log.Println(resp.Stdout)
 	err = b.SendToManager(resp)
 	if err != nil {
 		log.Println(err)
@@ -118,6 +119,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	if req.ResultAddress == "manager" {
 		//Send to manager
 		outEnc = b.enc
+		fmt.Println("Sending back to manager!")
 	} else {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
@@ -243,6 +245,17 @@ func (b *Builder) HandleMessage(i interface{}) {
 	case *rmake.BuilderRequest:
 		log.Println("Recieved builder request.")
 		b.RunJob(message)
+
+	case *rmake.BuilderResult:
+		log.Println("Recieved builder result.")
+		sdir := path.Join("builds", message.Session)
+		for _,f := range message.Results {
+			err := f.Save(sdir)
+			if err != nil {
+				fmt.Println("Error saving file!")
+				fmt.Println(err)
+			}
+		}
 
 	default:
 		log.Println("Recieved invalid message type.")

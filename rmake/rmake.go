@@ -22,6 +22,7 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 	p.OS = "Arch (the OS)"
 	p.Output = conf.Output
 
+	p.Files = make(map[string]*rmake.File)
 	for _, v := range conf.Files {
 		f := rmake.LoadFile(v.Path)
 		if f != nil {
