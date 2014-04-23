@@ -14,8 +14,8 @@ import (
 
 	"reflect"
 
-	"github.com/whyrusleeping/rmake/types"
 	slog "github.com/cihub/seelog"
+	"github.com/whyrusleeping/rmake/types"
 )
 
 type Builder struct {
@@ -35,26 +35,26 @@ type Builder struct {
 	outgoing chan interface{}
 
 	//Some data structures to synchronize file transfers
-	waitfile map[string]chan *rmake.File
+	waitfile    map[string]chan *rmake.File
 	reqfilewait chan *FileWait
-	newfiles chan *rmake.RequiredFileMessage
+	newfiles    chan *rmake.RequiredFileMessage
 
 	mgrReconnect chan struct{}
 
 	Procs int
 	UUID  int
 
-	Halt   chan struct{}
+	Halt chan struct{}
 
 	//Job Queue TODO: use this?
-	JQueue chan *rmake.BuilderRequest
+	JQueue      chan *rmake.BuilderRequest
 	RunningJobs chan struct{}
 }
 
 type FileWait struct {
-	File string
+	File    string
 	Session string
-	Reply chan *rmake.File
+	Reply   chan *rmake.File
 }
 
 func NewBuilder(listen string, manager string, nprocs int) *Builder {
@@ -74,7 +74,7 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	}
 
 	//Make sure build directory exists
-	os.Mkdir("builds", 0777 | os.ModeDir)
+	os.Mkdir("builds", 0777|os.ModeDir)
 
 	// Build new builder
 	b := new(Builder)
@@ -110,23 +110,23 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 func (b *Builder) FileSyncRoutine() {
 	for {
 		select {
-			case req := <-b.reqfilewait:
-				wpath := path.Join("builds", req.Session, req.File)
-				slog.Infof("Now waiting on: '%s'", wpath)
-				b.waitfile[wpath] = req.Reply
-			case fi := <-b.newfiles:
-				if fi.Payload == nil {
-					slog.Error("Received nil file!")
-					continue
-				}
-				wpath := path.Join("builds", fi.Session, fi.Payload.Path)
-				ch, ok := b.waitfile[wpath]
-				if !ok {
-					slog.Warnf("Received file nobody was asking for, session: '%s', path: '%s'",
-								fi.Session, fi.Payload.Path)
-				}
-				ch <- fi.Payload
-				delete(b.waitfile, wpath)
+		case req := <-b.reqfilewait:
+			wpath := path.Join("builds", req.Session, req.File)
+			slog.Infof("Now waiting on: '%s'", wpath)
+			b.waitfile[wpath] = req.Reply
+		case fi := <-b.newfiles:
+			if fi.Payload == nil {
+				slog.Error("Received nil file!")
+				continue
+			}
+			wpath := path.Join("builds", fi.Session, fi.Payload.Path)
+			ch, ok := b.waitfile[wpath]
+			if !ok {
+				slog.Warnf("Received file nobody was asking for, session: '%s', path: '%s'",
+					fi.Session, fi.Payload.Path)
+			}
+			ch <- fi.Payload
+			delete(b.waitfile, wpath)
 		}
 	}
 }
@@ -144,15 +144,15 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 
 //A routine that waits for jobs in the job queue
 //One of these should be spawned per processor core.
-//TODO: Eventually add in shutdown channel to the select statement 
+//TODO: Eventually add in shutdown channel to the select statement
 //for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
 		select {
-			case work := <-b.JQueue:
-				b.RunningJobs <- struct{}{}
-				b.RunJob(work)
-				<-b.RunningJobs
+		case work := <-b.JQueue:
+			b.RunningJobs <- struct{}{}
+			b.RunJob(work)
+			<-b.RunningJobs
 		}
 	}
 }
@@ -161,7 +161,7 @@ func (b *Builder) BuilderThread() {
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	slog.Infof("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
-	os.Mkdir(sdir, 0777 | os.ModeDir)
+	os.Mkdir(sdir, 0777|os.ModeDir)
 
 	for _, f := range req.Input {
 		err := f.Save(sdir)
@@ -181,7 +181,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		}
 	}
 
-	for _,ch := range waitlist {
+	for _, ch := range waitlist {
 		f := <-ch
 		slog.Infof("Got file we were waiting for: '%s'", f.Path)
 		f.Save(sdir)
@@ -217,7 +217,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
 		//TODO: dont hardcode port here!!!
-		send, err := net.Dial("tcp", req.ResultAddress + ":11222")
+		send, err := net.Dial("tcp", req.ResultAddress+":11222")
 		if err != nil {
 			slog.Error(err)
 			//TODO: decide what to do if this happens
@@ -228,11 +228,10 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	fipath := path.Join("builds", req.Session)
 	slog.Info("Loading %s to send on.\n", req.BuildJob.Output)
-	fi,err := rmake.LoadFile(fipath, req.BuildJob.Output)
+	fi, err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
 		slog.Error("Failed to load output file!")
 	}
-
 
 	if outEnc == nil {
 		results := new(rmake.BuilderResult)
@@ -269,7 +268,6 @@ func (b *Builder) Run() {
 
 	// Start Heartbeat
 	go b.StartPublisher()
-
 
 	<-b.Halt
 
@@ -314,7 +312,30 @@ func (b *Builder) ManagerSender() {
 func (b *Builder) HandleMessages() {
 	for {
 		m := <-b.incoming
-		b.HandleMessage(m)
+		switch message := m.(type) {
+		case *rmake.RequiredFileMessage:
+			log.Println("Received required file.")
+			//Get a file from another node
+			b.newfiles <- message
+
+		case *rmake.BuilderRequest:
+			slog.Info("Received builder request.")
+			b.JQueue <- message
+
+		case *rmake.BuilderResult:
+			slog.Info("Received builder result.")
+			sdir := path.Join("builds", message.Session)
+			for _, f := range message.Results {
+				err := f.Save(sdir)
+				if err != nil {
+					slog.Error("Error saving file!")
+					slog.Error(err)
+				}
+			}
+
+		default:
+			slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
+		}
 	}
 }
 
@@ -354,34 +375,6 @@ func (b *Builder) ReceiveFromManager() (interface{}, error) {
 	return i, nil
 }
 
-// Handles all messages except handshake message types
-func (b *Builder) HandleMessage(i interface{}) {
-	switch message := i.(type) {
-	case *rmake.RequiredFileMessage:
-		log.Println("Received required file.")
-		//Get a file from another node
-		b.newfiles <- message
-
-	case *rmake.BuilderRequest:
-		slog.Info("Received builder request.")
-		b.JQueue <- message
-
-	case *rmake.BuilderResult:
-		slog.Info("Received builder result.")
-		sdir := path.Join("builds", message.Session)
-		for _,f := range message.Results {
-			err := f.Save(sdir)
-			if err != nil {
-				slog.Error("Error saving file!")
-				slog.Error(err)
-			}
-		}
-
-	default:
-		slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
-	}
-}
-
 // Handles a connection from the listener
 // This could come from another builder.
 // Possibly from the manager too, but most likely another builder.
@@ -419,7 +412,7 @@ func (b *Builder) StartPublisher() {
 		select {
 		case <-tick.C:
 			b.SendStatusUpdate()
-		//TODO: have a 'shutdown' channel
+			//TODO: have a 'shutdown' channel
 		}
 	}
 }
