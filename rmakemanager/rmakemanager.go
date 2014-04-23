@@ -27,6 +27,14 @@ type Manager struct {
 	Incoming chan interface{}
 }
 
+type Build struct {
+	Session string
+	TotalJobs int
+	JobsDone int
+
+	//List of builders?
+}
+
 
 // Make a new manager
 func NewManager(listname string) *Manager {
