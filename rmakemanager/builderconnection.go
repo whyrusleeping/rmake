@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	slog "github.com/cihub/seelog"
-	"github.com/whyrusleeping/rmake/types"
 )
 
 // Builder Connection Type
@@ -27,14 +26,11 @@ type BuilderConnection struct {
 	enc *gob.Encoder
 	// The gob decoder
 	dec *gob.Decoder
-	// Index in the priority queue
-
 	//Channel for messages coming from the builder to the manager
 	Incoming chan interface{}
-
 	//Channel for messages going to the builder
 	Outgoing chan interface{}
-
+	// Index in the priority queue
 	Index int
 }
 
@@ -58,7 +54,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 }
 
 func (b *BuilderConnection) Listen() {
-	go func () {
+	go func() {
 		for {
 			i := <-b.Outgoing
 			err := b.enc.Encode(&i)
@@ -86,30 +82,3 @@ func (b *BuilderConnection) Listen() {
 func (b *BuilderConnection) H() int {
 	return b.NumJobs
 }
-
-//TODO: this should be more asynchronous.
-//Should have a goroutine looping somewhere listening on a channel
-//for new messages to send
-func (b *BuilderConnection) Send(i interface{}) error {
-	err := b.enc.Encode(&i)
-	if err != nil {
-		return err
-	}
-	//b.wri.Flush()
-	return nil
-}
-
-func (b *BuilderConnection) HandleStatusUpdate(bsu *rmake.BuilderStatusUpdate) {
-	b.Manager.HandleBuilderStatusUpdate(b, bsu)
-}
-
-//
-func (b *BuilderConnection) Recieve() (interface{}, error) {
-	var i interface{}
-	err := b.dec.Decode(&i)
-	if err != nil {
-		return nil, err
-	}
-	return i, nil
-}
-
