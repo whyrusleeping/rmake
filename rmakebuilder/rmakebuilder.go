@@ -30,6 +30,7 @@ type Builder struct {
 	UpdateFrequency time.Duration
 	Running         bool
 
+	//To synchronize socket reads and writes
 	incoming chan interface{}
 	outgoing chan interface{}
 
@@ -96,6 +97,7 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	return b
 }
 
+//Handles incoming files and requests for them
 func (b *Builder) FileSyncRoutine() {
 	for {
 		select {
@@ -116,6 +118,7 @@ func (b *Builder) FileSyncRoutine() {
 	}
 }
 
+//Register a listener for receiving a certain file
 func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 	fw := new(FileWait)
 	fw.File = file
@@ -126,6 +129,7 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 	return fw.Reply
 }
 
+//
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
@@ -251,6 +255,7 @@ func (b *Builder) Stop() {
 	b.Halt <- struct{}{}
 }
 
+//poll for messages from manager
 func (b *Builder) ManagerListener() {
 	for {
 		mes, err := b.RecieveFromManager()
@@ -263,6 +268,7 @@ func (b *Builder) ManagerListener() {
 	}
 }
 
+//Synchronize sending messages to manager
 func (b *Builder) ManagerSender() {
 	for {
 		mes := <-b.outgoing
@@ -283,6 +289,7 @@ func (b *Builder) HandleMessages() {
 	}
 }
 
+//Listen for and handle new connections
 func (b *Builder) SocketListener() {
 	for {
 		con, err := b.list.Accept()
@@ -327,23 +334,22 @@ func (b *Builder) HandleMessage(i interface{}) {
 		b.newfiles <- message
 
 	case *rmake.BuilderRequest:
-		log.Println("Recieved builder request.")
+		slog.Info("Recieved builder request.")
 		go b.RunJob(message)
 
 	case *rmake.BuilderResult:
-		log.Println("Recieved builder result.")
+		slog.Info("Recieved builder result.")
 		sdir := path.Join("builds", message.Session)
 		for _,f := range message.Results {
 			err := f.Save(sdir)
 			if err != nil {
-				fmt.Println("Error saving file!")
-				fmt.Println(err)
+				slog.Error("Error saving file!")
+				slog.Error(err)
 			}
 		}
 
 	default:
-		log.Println("Recieved invalid message type.")
-		log.Println(reflect.TypeOf(message))
+		slog.Warnf("Recieved invalid message type. '%s'", reflect.TypeOf(message))
 	}
 }
 

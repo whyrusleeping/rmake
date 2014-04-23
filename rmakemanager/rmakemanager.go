@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"net"
-	"compress/gzip"
 	"encoding/gob"
 	"encoding/hex"
 	"crypto/rand"
@@ -67,6 +66,7 @@ func (m *Manager) SendToClient(session string, mes interface{}) {
 	}
 }
 
+//All incoming messages are synchronized here
 func (m *Manager) MessageListener() {
 	for {
 		mes := <-m.Incoming
@@ -117,8 +117,9 @@ func (m *Manager) UUIDGenerator() {
 	}
 }
 
+//Generates a random session string and registers it in the session map
 func (m *Manager) GetNewSession() string {
-	bytes := make([]byte, 8)
+	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	session := hex.EncodeToString(bytes)
 	log.Infof("Made new session: %s\n", session)
@@ -126,6 +127,7 @@ func (m *Manager) GetNewSession() string {
 	return session
 }
 
+//When a session is complete, remove it from the session map
 func (m *Manager) ReleaseSession(session string) {
 
 }
@@ -216,11 +218,13 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 		ack = rmake.NewManagerAcknowledgeFailure("Error, protocol version mismatch")
 		errored = true
 	}
+
 	// Send off the ack
 	err := bc.Send(ack)
 	if err != nil {
 		log.Error(err)
 	}
+
 	// If we errored above, free the uuid
 	if errored {
 		log.Error("Errored, returning UUID")
@@ -228,6 +232,8 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 		return
 	}
 	go bc.Listen()
+
+	//TODO: potential race condition here
 	m.queue.Push(bc)
 }
 
@@ -251,8 +257,6 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 // resources the request requires.
 func (m *Manager) HandleConnection(c net.Conn) {
 	var gobint interface{}
-
-	log.Info("SHOULD ONLY BE CLIENT CONNECTION!")
 
 	dec := gob.NewDecoder(c)
 	err := dec.Decode(&gobint)
@@ -286,27 +290,6 @@ func (m *Manager) HandleConnection(c net.Conn) {
 	}
 
 	return
-}
-
-func (m *Manager) Reply(i interface{}, addr string) error {
-
-	log.Infof("Replying to %s\n", addr)
-
-	mgr, err := net.Dial("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	wrt := gzip.NewWriter(mgr)
-	enc := gob.NewEncoder(wrt)
-
-	err = enc.Encode(&i)
-	if err != nil {
-		return err
-	}
-	wrt.Close()
-	mgr.Close()
-	return nil
 }
 
 func (m *Manager) Start() {
