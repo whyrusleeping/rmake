@@ -3,7 +3,30 @@
 ##Network Configuration
 An rmake build cluster has two components, the manager node, which handles distributing jobs and source code between the builder nodes, and the builder nodes which queue up jobs to be run and execute them, sending the resulting files where they need to be for the next step.
 
-##Builds
+##Builds (Quick overview)
 Builds are started by a client program who creates a build package (described later) and sends it to the manager node. From there, the manager decides on a list of builder nodes that will participate in this build based on their current work loads, cpu usage and memory consumption. After choosing a node set, the manager distributes the jobs to their respective nodes.
 Currently rmake supports C and C++ style building, where a large number of object files are built independantly and sent to a final node for linking the final executable.
 Once the final executable is built it is sent from the builder node that linked it, to the manager node, and finally back to the client who initiated the build.
+
+##Jobs
+Our current implementation allows the client to specify a series of jobs that need to be run in order to complete the build.
+The Job structure looks like:
+
+	type Job struct {
+		Command string
+		Args []string
+		Deps []string
+		Output string
+	}
+
+And is declared in types/job.go
+
+The command field specifies the base command that will be run (i.e. gcc or clang++). The Args array is an array of the arguments that will be passed to the command. The Deps array is a list of files that are required by this job in order to run. When a builder is starting on this job, it first checks to ensure all of the dependencies are available, if not, it waits. The output field is the name of the resulting file that the command will create, for most commands, this will be an object file, or the final program binary in the case of a linker job. Currently, we only support one output file per command.
+
+##Manager
+The manager servers as an intermediary between the client and the builder servers who perform the build itself. The manager is responsible for scheduling which builder should perform which jobs based on their current load. 
+
+##Builder
+
+##Roadmap for the future
+...

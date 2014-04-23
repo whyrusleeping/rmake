@@ -179,6 +179,7 @@ func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
 			//return nil, err // I don't think we want to simply die...
 			panic(err)
 		}
+
 		// Found some data, grab the type...
 		switch message := gobint.(type) {
 		case *rmake.BuildStatus:
