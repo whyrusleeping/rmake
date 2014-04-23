@@ -47,7 +47,8 @@ type Builder struct {
 	Halt   chan struct{}
 
 	//Job Queue TODO: use this?
-	JQueue chan *rmake.Job
+	JQueue chan *rmake.BuilderRequest
+	RunningJobs chan struct{}
 }
 
 type FileWait struct {
@@ -64,6 +65,7 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 		log.Println("Could not connect to manager.")
 		return nil
 	}
+
 	// Setup socket to listen to
 	list, err := net.Listen("tcp", listen)
 	if err != nil {
@@ -91,9 +93,16 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.waitfile = make(map[string]chan *rmake.File)
 	b.reqfilewait = make(chan *FileWait)
 
+	b.JQueue = make(chan *rmake.BuilderRequest)
+	b.RunningJobs = make(chan struct{}, nprocs)
+
 	b.UpdateFrequency = time.Second * 60
 	b.Halt = make(chan struct{})
 	b.mgrReconnect = make(chan struct{})
+
+	for i := 0; i < nprocs; i++ {
+		go b.BuilderThread()
+	}
 	return b
 }
 
@@ -106,6 +115,10 @@ func (b *Builder) FileSyncRoutine() {
 				slog.Infof("Now waiting on: '%s'", wpath)
 				b.waitfile[wpath] = req.Reply
 			case fi := <-b.newfiles:
+				if fi.Payload == nil {
+					slog.Error("Recieved nil file!")
+					continue
+				}
 				wpath := path.Join("builds", fi.Session, fi.Payload.Path)
 				ch, ok := b.waitfile[wpath]
 				if !ok {
@@ -131,8 +144,16 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 
 //A routine that waits for jobs in the job queue
 //One of these should be spawned per processor core.
+//TODO: Eventually add in shutdown channel to the select statement 
+//for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
+		select {
+			case work := <-b.JQueue:
+				b.RunningJobs <- struct{}{}
+				b.RunJob(work)
+				<-b.RunningJobs
+		}
 	}
 }
 
@@ -206,7 +227,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 
 	fipath := path.Join("builds", req.Session)
-	log.Printf("Loading %s to send on.\n", fipath)
+	log.Printf("Loading %s to send on.\n", req.BuildJob.Output)
 	fi,err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
 		log.Println("Failed to load output file!")
@@ -342,7 +363,7 @@ func (b *Builder) HandleMessage(i interface{}) {
 
 	case *rmake.BuilderRequest:
 		slog.Info("Recieved builder request.")
-		go b.RunJob(message)
+		b.JQueue <- message
 
 	case *rmake.BuilderResult:
 		slog.Info("Recieved builder result.")
@@ -383,7 +404,7 @@ func (b *Builder) SendStatusUpdate() {
 	log.Println("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
-	stat.QueuedJobs = 0
+	stat.QueuedJobs = len(b.JQueue)
 	stat.MemUse = 0
 	log.Println(stat)
 

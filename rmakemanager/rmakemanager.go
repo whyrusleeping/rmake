@@ -127,7 +127,7 @@ func (m *Manager) GetNewSession() string {
 	return session
 }
 
-//When a session is complete, remove it from the session map
+//When a session isstring complete, remove it from the session map
 func (m *Manager) ReleaseSession(session string) {
 
 }
