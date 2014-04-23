@@ -29,7 +29,7 @@ func (q *BuilderQueue) Push(bc *BuilderConnection) {
 	i := len(q.arr)
 	bc.Index = i
 	q.arr = append(q.arr, bc)
-	q.percUp(i)
+	q.percUpUnsafe(i)
 
 	q.rwmutex.Unlock()
 }
@@ -43,7 +43,7 @@ func (q *BuilderQueue) Pop() *BuilderConnection {
 	q.arr[1] = q.arr[len(q.arr)-1]
 	q.arr[1].Index = 1
 	q.arr = q.arr[:len(q.arr)-1]
-	q.percDown(1)
+	q.percDownUnsafe(1)
 
 	q.rwmutex.Unlock()
 	return ret
@@ -67,18 +67,6 @@ func (q *BuilderQueue) Len() int {
 	return l
 }
 
-// Percolate Up
-func (q *BuilderQueue) percUp(from int) {
-	for from > 1 {
-		if q.cmp(q.arr[from/2], q.arr[from]) {
-			q.swapUnsafe(from/2, from)
-			from /= 2
-		} else {
-			break
-		}
-	}
-}
-
 // Swap two items
 // Locks the mutex
 func (q *BuilderQueue) Swap(i, j int) {
@@ -95,8 +83,38 @@ func (q *BuilderQueue) swapUnsafe(i, j int) {
 	q.arr[j].Index = j
 }
 
+// Percolate Up
+// Locks the rwmutex
+func (q *BuilderQueue) PercUp(from int) {
+	q.rwmutex.Lock()
+	q.percUpUnsafe(from)
+	q.rwmutex.Unlock()
+}
+
+// Percolate Up
+// Does not lock the rwmutex
+func (q *BuilderQueue) percUpUnsafe(from int) {
+	for from > 1 {
+		if q.cmp(q.arr[from/2], q.arr[from]) {
+			q.swapUnsafe(from/2, from)
+			from /= 2
+		} else {
+			break
+		}
+	}
+}
+
 // Percolate down
-func (q *BuilderQueue) percDown(from int) {
+// Locks the rwmutex
+func (q *BuilderQueue) PercDown(from int) {
+	q.rwmutex.Lock()
+	q.percDownUnsafe(from)
+	q.rwmutex.Unlock()
+}
+
+// Percolate down
+// Does not lock the rwmutex
+func (q *BuilderQueue) percDownUnsafe(from int) {
 	for from*2 < len(q.arr) {
 		left := from * 2
 		right := left + 1
@@ -139,5 +157,5 @@ func (q *BuilderQueue) Remove(i int) {
 func (q *BuilderQueue) removeUnsafe(i int) {
 	q.arr[i] = q.arr[len(q.arr)-1]
 	q.arr = q.arr[:len(q.arr)-1]
-	q.percDown(i)
+	q.percDownUnsafe(i)
 }
