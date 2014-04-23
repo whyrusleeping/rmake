@@ -129,6 +129,13 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 	return fw.Reply
 }
 
+//A routine that waits for jobs in the job queue
+//One of these should be spawned per processor core.
+func (b *Builder) BuilderThread() {
+	for {
+	}
+}
+
 //
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)

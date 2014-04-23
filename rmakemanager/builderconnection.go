@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	slog "github.com/cihub/seelog"
+	"github.com/whyrusleeping/rmake/types"
 )
 
 // Builder Connection Type
@@ -26,10 +27,13 @@ type BuilderConnection struct {
 	enc *gob.Encoder
 	// The gob decoder
 	dec *gob.Decoder
+
 	//Channel for messages coming from the builder to the manager
 	Incoming chan interface{}
+
 	//Channel for messages going to the builder
 	Outgoing chan interface{}
+
 	// Index in the priority queue
 	Index int
 }
@@ -54,7 +58,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 }
 
 func (b *BuilderConnection) Listen() {
-	go func() {
+	go func () {
 		for {
 			i := <-b.Outgoing
 			err := b.enc.Encode(&i)
@@ -81,4 +85,8 @@ func (b *BuilderConnection) Listen() {
 //Sorting Heuristic
 func (b *BuilderConnection) H() int {
 	return b.NumJobs
+}
+
+func (b *BuilderConnection) HandleStatusUpdate(bsu *rmake.BuilderStatusUpdate) {
+	b.Manager.HandleBuilderStatusUpdate(b, bsu)
 }
