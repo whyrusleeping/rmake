@@ -116,13 +116,13 @@ func (b *Builder) FileSyncRoutine() {
 				b.waitfile[wpath] = req.Reply
 			case fi := <-b.newfiles:
 				if fi.Payload == nil {
-					slog.Error("Recieved nil file!")
+					slog.Error("Received nil file!")
 					continue
 				}
 				wpath := path.Join("builds", fi.Session, fi.Payload.Path)
 				ch, ok := b.waitfile[wpath]
 				if !ok {
-					slog.Warnf("Recieved file nobody was asking for, session: '%s', path: '%s'",
+					slog.Warnf("Received file nobody was asking for, session: '%s', path: '%s'",
 								fi.Session, fi.Payload.Path)
 				}
 				ch <- fi.Payload
@@ -286,7 +286,7 @@ func (b *Builder) Stop() {
 //poll for messages from manager
 func (b *Builder) ManagerListener() {
 	for {
-		mes, err := b.RecieveFromManager()
+		mes, err := b.ReceiveFromManager()
 		if err != nil {
 			slog.Error(err)
 			//TODO: switch on the error type and handle appropriately
@@ -344,10 +344,10 @@ func (b *Builder) SendToManager(i interface{}) {
 }
 
 // Read a message from the manager
-func (b *Builder) RecieveFromManager() (interface{}, error) {
+func (b *Builder) ReceiveFromManager() (interface{}, error) {
 	var i interface{}
 	err := b.dec.Decode(&i)
-	fmt.Println("Recieve from manager.")
+	fmt.Println("Received from manager.")
 	if err != nil {
 		return nil, err
 	}
@@ -358,16 +358,16 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 func (b *Builder) HandleMessage(i interface{}) {
 	switch message := i.(type) {
 	case *rmake.RequiredFileMessage:
-		log.Println("Recieved required file.")
+		log.Println("Received required file.")
 		//Get a file from another node
 		b.newfiles <- message
 
 	case *rmake.BuilderRequest:
-		slog.Info("Recieved builder request.")
+		slog.Info("Received builder request.")
 		b.JQueue <- message
 
 	case *rmake.BuilderResult:
-		slog.Info("Recieved builder result.")
+		slog.Info("Received builder result.")
 		sdir := path.Join("builds", message.Session)
 		for _,f := range message.Results {
 			err := f.Save(sdir)
@@ -378,7 +378,7 @@ func (b *Builder) HandleMessage(i interface{}) {
 		}
 
 	default:
-		slog.Warnf("Recieved invalid message type. '%s'", reflect.TypeOf(message))
+		slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
 	}
 }
 
@@ -406,6 +406,7 @@ func (b *Builder) SendStatusUpdate() {
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
 	stat.QueuedJobs = len(b.JQueue)
+	stat.RunningJobs = len(b.RunningJobs)
 	stat.MemUse = 0
 	log.Println(stat)
 
@@ -436,7 +437,7 @@ func (b *Builder) DoHandshake() {
 	b.enc.Encode(&i)
 	log.Printf("Sent Announcement\n")
 
-	inter, err := b.RecieveFromManager()
+	inter, err := b.ReceiveFromManager()
 	if err != nil {
 		log.Panic(err)
 	}
