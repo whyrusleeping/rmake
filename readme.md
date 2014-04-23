@@ -14,6 +14,8 @@ On the client machine, cd into the directory you want to build in, and run
 	
 for all the files your build process needs, This only needs to be done once per project. rmake will also keep track of the mod times on files and only update the files on the server if youve made a change.
 
+With the our latest version of rmake, you will also have to specify the jobs that have to be run in order to allow the system to distribute the builds across multiple servers.
+
 Next set the servers location with 
 
     rmake server myserver.com:1234
@@ -62,6 +64,7 @@ or your fish config:
 Then, simply:
 
 	go get github.com/whyrusleeping/rmake/rmake
-	go get github.com/whyrusleeping/rmake/rmakeserver
+	go get github.com/whyrusleeping/rmake/rmakemanager
+	go get github.com/whyrusleeping/rmake/rmakebuilder
 	
 Feedback, bug reports and feature requests are very much appreciated and wanted!

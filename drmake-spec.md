@@ -23,10 +23,26 @@ And is declared in types/job.go
 
 The command field specifies the base command that will be run (i.e. gcc or clang++). The Args array is an array of the arguments that will be passed to the command. The Deps array is a list of files that are required by this job in order to run. When a builder is starting on this job, it first checks to ensure all of the dependencies are available, if not, it waits. The output field is the name of the resulting file that the command will create, for most commands, this will be an object file, or the final program binary in the case of a linker job. Currently, we only support one output file per command.
 
-##Manager
+##Client (rmake)
+The client program parses in an rmake configuration file created either by hand or with the rmake tool itself and uses it to create and send a build package to an rmake manager. 
+
+##Manager (rmakemanager)
 The manager servers as an intermediary between the client and the builder servers who perform the build itself. The manager is responsible for scheduling which builder should perform which jobs based on their current load. 
 
-##Builder
+###Job Scheduling
+The manager maintains a priority queue of all builder nodes in its network. When a job, or several jobs, are recieved from a client, the manager pops the 'least busy' node off of its queue, assigns it a job, and pushes it back into the queue. This way, load it fairly balanced across the cluster.
+The manager also recieves periodic updates from the builder using a publish subscribe style system, giving a more accurate depiction of its current load, upon recieving this information, the manager updates the builders position in the queue.
+
+###Job Updates
+As different build nodes complete their jobs, notifications of that event are sent to the manager where they are collected and relayed to the client.
+
+###Sessions
+
+###Build Failures
+
+##Builder (rmakebuilder)
 
 ##Roadmap for the future
-...
+Makefile parsing
+Build optimization via analysis
+persistent build sessions (for unchanged file reuse)
