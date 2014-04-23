@@ -72,9 +72,12 @@ func (b *BuilderConnection) Listen() {
 		err := b.dec.Decode(&i)
 		if err != nil {
 			slog.Critical(err)
+
+			//TEMP! only for debugging
+			b.conn.Close()
 			return
 		}
-		slog.Info("Builder recieved message.")
+		slog.Info("Recieved message from builder.")
 		b.Incoming <- i
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"path"
 	"time"
 
+	"reflect"
+
 	"github.com/whyrusleeping/rmake/types"
 )
 
@@ -28,6 +30,8 @@ type Builder struct {
 	Running         bool
 
 	incoming chan interface{}
+	outgoing chan interface{}
+
 	mgrReconnect chan struct{}
 
 	Procs int
@@ -65,11 +69,14 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
 	b.incoming = make(chan interface{})
+	b.outgoing = make(chan interface{})
+
 	b.UpdateFrequency = time.Second * 15
 	b.Halt = make(chan struct{})
 	b.mgrReconnect = make(chan struct{})
 	return b
 }
+
 
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)
@@ -92,22 +99,20 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		}
 	}
 
-	resp := new(rmake.BuildFinishedMessage)
+	resp := new(rmake.JobFinishedMessage)
 	cmd := exec.Command(req.BuildJob.Command, req.BuildJob.Args...)
 	cmd.Dir = sdir
 
 	out, err := cmd.CombinedOutput()
 	resp.Stdout = string(out)
+	resp.Session = req.Session
 	if err != nil {
 		log.Println(err)
 		resp.Error = err.Error()
 		resp.Success = false
 	}
 	log.Println(resp.Stdout)
-	err = b.SendToManager(resp)
-	if err != nil {
-		log.Println(err)
-	}
+	b.SendToManager(resp)
 
 	if req.ResultAddress == "" {
 		//Actually... shouldnt happen
@@ -118,7 +123,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	var outEnc *gob.Encoder
 	if req.ResultAddress == "manager" {
 		//Send to manager
-		outEnc = b.enc
+		outEnc = nil
 		fmt.Println("Sending back to manager!")
 	} else {
 		//Send to other builder
@@ -135,20 +140,26 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	fipath := path.Join("builds", req.Session, req.BuildJob.Output)
 	log.Printf("Loading %s to send on.\n", fipath)
 	fi := rmake.LoadFile(fipath)
+	results := new(rmake.BuilderResult)
 	if fi == nil {
 		log.Println("Failed to load output file!")
+	} else {
+		results.Results = append(results.Results, fi)
 	}
 
-	results := new(rmake.BuilderResult)
-	results.Results = append(results.Results, fi)
 	results.Session = req.Session
 
-	i := interface{}(results)
-	err = outEnc.Encode(&i)
-	if err != nil {
-		log.Println("Sending of result to target failed.")
+
+	if outEnc == nil {
+		b.SendToManager(results)
+	} else {
+		i := interface{}(results)
+		err := outEnc.Encode(&i)
+		if err != nil {
+			log.Println(err)
+		}
 	}
-	log.Println("Job finished!")
+
 	log.Printf("Job for session '%s' finished.\n", req.Session)
 }
 
@@ -161,9 +172,11 @@ func (b *Builder) Run() {
 
 	// Start message handler
 	go b.HandleMessages()
+	go b.ManagerSender()
 
 	// Start Heartbeat
 	go b.StartPublisher()
+
 
 	<-b.Halt
 
@@ -189,6 +202,19 @@ func (b *Builder) ManagerListener() {
 	}
 }
 
+func (b *Builder) ManagerSender() {
+	for {
+		mes := <-b.outgoing
+		err := b.enc.Encode(&mes)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+//Right now this function is fairly pointless, but eventually
+//we will put some extra logic here to determine what can be handled
+//asynchronously
 func (b *Builder) HandleMessages() {
 	for {
 		m := <-b.incoming
@@ -215,12 +241,9 @@ func (b *Builder) SocketListener() {
 }
 
 // Send a message to the manager
-func (b *Builder) SendToManager(i interface{}) error {
-	err := b.enc.Encode(&i)
-	if err != nil {
-		return err
-	}
-	return nil
+func (b *Builder) SendToManager(i interface{}) {
+	log.Printf("Send to manager '%s'\n", reflect.TypeOf(i))
+	b.outgoing <- i
 }
 
 // Read a message from the manager
@@ -259,6 +282,7 @@ func (b *Builder) HandleMessage(i interface{}) {
 
 	default:
 		log.Println("Recieved invalid message type.")
+		log.Println(reflect.TypeOf(message))
 	}
 }
 
@@ -280,7 +304,7 @@ func (b *Builder) HandleConnection(con net.Conn) {
 	con.Close()
 }
 
-func (b *Builder) SendStatusUpdate() error {
+func (b *Builder) SendStatusUpdate() {
 	//TODO: get actual system information
 	log.Println("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
@@ -289,13 +313,7 @@ func (b *Builder) SendStatusUpdate() error {
 	stat.MemUse = 0
 	log.Println(stat)
 
-	err := b.SendToManager(stat)
-	if err != nil {
-		log.Println(err)
-		log.Println("I should attempt to reconnect!")
-		return err
-	}
-	return nil
+	b.SendToManager(stat)
 }
 
 func (b *Builder) StartPublisher() {
@@ -303,10 +321,8 @@ func (b *Builder) StartPublisher() {
 	for {
 		select {
 		case <-tick.C:
-			err := b.SendStatusUpdate()
-			if err != nil {
-				return
-			}
+			b.SendStatusUpdate()
+		//TODO: have a 'shutdown' channel
 		}
 	}
 }
@@ -319,8 +335,9 @@ func (b *Builder) DoHandshake() {
 		log.Panic(err)
 	}
 
-	announcement := rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
-	b.SendToManager(announcement)
+	var i interface{}
+	i = rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
+	b.enc.Encode(&i)
 	log.Printf("Sent Announcement\n")
 
 	inter, err := b.RecieveFromManager()
@@ -364,7 +381,6 @@ func main() {
 
 	fmt.Println("rmakebuilder")
 	if b := NewBuilder(listname, manager, procs); b != nil {
-		// Handshake with the manager
 		b.DoHandshake()
 		// Start the builder
 		b.Run()

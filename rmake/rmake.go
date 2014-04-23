@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"reflect"
+
 	"github.com/dustin/go-humanize"
 	"github.com/whyrusleeping/rmake/types"
 )
@@ -185,8 +187,12 @@ func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
 		case *rmake.FinalBuildResult:
 			fmt.Println("Final Build Result")
 			fbr = message
+		case *rmake.BuilderResult:
+			fmt.Println("Got builder result.")
+			fmt.Printf("Got %d files back.", len(message.Results))
 		default:
 			fmt.Println("Unknown Type.")
+			fmt.Println(reflect.TypeOf(message))
 		}
 	}
 

@@ -14,7 +14,7 @@ func init() {
 	gob.Register(&FinalBuildResult{})
 	gob.Register(&RequiredFileMessage{})
 	gob.Register(&BuilderStatusUpdate{})
-	gob.Register(&BuildFinishedMessage{})
+	gob.Register(&JobFinishedMessage{})
 	gob.Register(&BuildStatus{})
 	gob.Register(&BuilderAnnouncement{})
 	gob.Register(&ManagerAcknowledge{})
@@ -97,11 +97,12 @@ func (br *BuilderRequest) GetFile(fi string) *File {
 
 //A response from a builder who has finished a job
 //Builder -> Manager
-type BuildFinishedMessage struct {
+type JobFinishedMessage struct {
 	//Standard out from running a job
 	Stdout  string
 	Error   string
 	Success bool
+	Session string
 }
 
 //A response that is sent back from the server

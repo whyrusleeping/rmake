@@ -50,6 +50,15 @@ func NewManager(listname string) *Manager {
 	return m
 }
 
+func (m *Manager) SendToClient(session string, mes interface{}) {
+	ch, ok := m.sessions[session]
+	if ok {
+		ch <- mes
+	} else {
+		log.Critical("Tried to send message to nonexistant client session!")
+	}
+}
+
 func (m *Manager) MessageListener() {
 	for {
 		mes := <-m.Incoming
@@ -58,12 +67,16 @@ func (m *Manager) MessageListener() {
 				log.Info("Build Status Update.")
 				log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
 			case *rmake.BuilderResult:
-				ch, ok := m.sessions[mes.Session]
-				if ok {
-					ch <- mes
-				}
-			case *rmake.BuildFinishedMessage:
-				log.Info("Misleading type name, build not finished yet. just a job.")
+				fbr := new(rmake.FinalBuildResult)
+				fbr.Results = mes.Results
+				fbr.Session = mes.Session
+				m.SendToClient(mes.Session, fbr)
+
+			case *rmake.JobFinishedMessage:
+				log.Infof("Job finished for session: %s", mes.Session)
+				//TODO, update build info
+				m.SendToClient(mes.Session, mes)
+
 			case *rmake.BuilderStatusUpdate:
 				log.Info("Builder updated load")
 			default:
@@ -244,7 +257,11 @@ func (m *Manager) HandleConnection(c net.Conn) {
 	case *rmake.ManagerRequest:
 		log.Info("Manager Request")
 		m.HandleManagerRequest(message, session)
+	case *rmake.BuilderAnnouncement:
+		go m.HandleBuilderAnnouncement(message, c)
+		return
 	default:
+		log.Info(reflect.TypeOf(message))
 		log.Info("Unknown Type.")
 	}
 
