@@ -53,6 +53,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	return bc
 }
 
+// The listener
 func (b *BuilderConnection) Listener() {
 	var i interface{}
 	for {
@@ -69,6 +70,7 @@ func (b *BuilderConnection) Listener() {
 	}
 }
 
+// The sender
 func (b *BuilderConnection) Sender() {
 	for {
 		i := <-b.Outgoing

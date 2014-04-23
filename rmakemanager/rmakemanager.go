@@ -1,25 +1,25 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/gob"
-	"encoding/hex"
 	"flag"
 	"net"
+	"encoding/gob"
+	"encoding/hex"
+	"crypto/rand"
 
 	"reflect"
 
-	log "github.com/cihub/seelog"
 	"github.com/whyrusleeping/rmake/types"
+	log "github.com/cihub/seelog"
 )
 
 // Main manager type, basically globals right now
 type Manager struct {
-	getUuid  chan int
-	putUuid  chan int
-	bcMap    map[int]*BuilderConnection
-	list     net.Listener
-	queue    *BuilderQueue
+	getUuid chan int
+	putUuid chan int
+	bcMap   map[int]*BuilderConnection
+	list    net.Listener
+	queue	*BuilderQueue
 	sessions map[string]chan interface{}
 
 	//Messages coming in to the manager
@@ -27,12 +27,13 @@ type Manager struct {
 }
 
 type Build struct {
-	Session   string
+	Session string
 	TotalJobs int
-	JobsDone  int
+	JobsDone int
 
 	//List of builders?
 }
+
 
 // Make a new manager
 func NewManager(listname string) *Manager {
@@ -70,27 +71,27 @@ func (m *Manager) MessageListener() {
 	for {
 		mes := <-m.Incoming
 		switch mes := mes.(type) {
-		case *rmake.BuildStatus:
-			log.Info("Build Status Update.")
-			log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
-		case *rmake.BuilderResult:
-			fbr := new(rmake.FinalBuildResult)
-			fbr.Results = mes.Results
-			fbr.Session = mes.Session
-			fbr.Success = true
-			m.SendToClient(mes.Session, fbr)
+			case *rmake.BuildStatus:
+				log.Info("Build Status Update.")
+				log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
+			case *rmake.BuilderResult:
+				fbr := new(rmake.FinalBuildResult)
+				fbr.Results = mes.Results
+				fbr.Session = mes.Session
+				fbr.Success = true
+				m.SendToClient(mes.Session, fbr)
 
-		case *rmake.JobFinishedMessage:
-			log.Infof("Job finished for session: %s", mes.Session)
-			//TODO, update build info
+			case *rmake.JobFinishedMessage:
+				log.Infof("Job finished for session: %s", mes.Session)
+				//TODO, update build info
 
-			m.SendToClient(mes.Session, mes)
+				m.SendToClient(mes.Session, mes)
 
-		case *rmake.BuilderStatusUpdate:
-			log.Info("Builder updated load")
-		default:
-			log.Warn("Unrecognized message type")
-			log.Warn(reflect.TypeOf(mes))
+			case *rmake.BuilderStatusUpdate:
+				log.Info("Builder updated load")
+			default:
+				log.Warn("Unrecognized message type")
+				log.Warn(reflect.TypeOf(mes))
 		}
 	}
 }
@@ -126,7 +127,7 @@ func (m *Manager) GetNewSession() string {
 	return session
 }
 
-//When a session is complete, remove it from the session map
+//When a session isstring complete, remove it from the session map
 func (m *Manager) ReleaseSession(session string) {
 
 }
@@ -144,7 +145,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 
 	//Find the 'final' job in our list
 	var finaljob *rmake.Job
-	for _, j := range request.Jobs {
+	for _,j := range request.Jobs {
 		if request.Output == j.Output {
 			finaljob = j
 		}
@@ -155,10 +156,10 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 	}
 	br := new(rmake.BuilderRequest)
 	br.BuildJob = finaljob
-	br.Session = session         //TODO: method of creating and tracking sessions?
+	br.Session = session //TODO: method of creating and tracking sessions?
 	br.ResultAddress = "manager" //Key string, recognized by builder
 
-	for _, dep := range finaljob.Deps {
+	for _,dep := range finaljob.Deps {
 		depfi, ok := request.Files[dep]
 		if !ok {
 			log.Infof("final builder will need to wait on %s\n", dep)
@@ -170,10 +171,10 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 
 	log.Infof("Sending job to '%s'\n", final.Hostname)
 	final.Outgoing <- br
-	//final.Send(br)
+
 
 	//assign each job to a builder
-	for _, j := range request.Jobs {
+	for _,j := range request.Jobs {
 		if j == finaljob {
 			continue
 		}
@@ -183,7 +184,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 		br.Session = session
 		br.ResultAddress = final.Hostname
 
-		for _, dep := range j.Deps {
+		for _,dep := range j.Deps {
 			depfi, ok := request.Files[dep]
 			if !ok {
 				log.Infof("Builder will need to wait on %s\n", dep)
@@ -192,13 +193,14 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 				br.Input = append(br.Input, depfi)
 			}
 		}
+
 		builder := m.queue.Pop()
 		log.Infof("Sending job to '%s'\n", builder.Hostname)
 		builder.Outgoing <- br
-		//builder.Send(br)
 		builder.NumJobs++
 		m.queue.Push(builder)
 	}
+
 	// Reply to client
 	enc := gob.NewEncoder(c)
 	for {
@@ -230,7 +232,11 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 	}
 
 	// Send off the ack
-	bc.Outgoing <- ack
+	i := interface{}(ack)
+	err := bc.enc.Encode(&i)
+	if err != nil {
+		log.Error(err)
+	}
 
 	// If we errored above, free the uuid
 	if errored {
@@ -266,6 +272,7 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 func (m *Manager) HandleConnection(c net.Conn) {
 	// Decode the message
 	var gobint interface{}
+
 	dec := gob.NewDecoder(c)
 	err := dec.Decode(&gobint)
 	if err != nil {

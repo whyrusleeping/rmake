@@ -37,8 +37,10 @@ The manager also recieves periodic updates from the builder using a publish subs
 As different build nodes complete their jobs, notifications of that event are sent to the manager where they are collected and relayed to the client.
 
 ###Sessions
+When a client connects to the manager, the manager creates a session ID for it. This session ID is used to mark jobs on the builders so that they can talk to each other more easily. Currently, sessions IDs are not reused, but in the future we will use them to speed up builds by only rebuilding files changes since the last build.
 
 ###Build Failures
+When a build fails, due to poorly written code or other compiler errors, the manager notifies all the builders that they should stop working on that build. And then notifies the client that their build has failed, complete with compiler error messages.
 
 ##Builder (rmakebuilder)
 

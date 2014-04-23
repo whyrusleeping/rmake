@@ -171,6 +171,7 @@ type RequiredFileMessage struct {
 //Builder -> Manager
 type BuilderStatusUpdate struct {
 	QueuedJobs int
+	RunningJobs int
 	CPULoad    float32
 	MemUse     float32
 }
