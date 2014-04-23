@@ -159,7 +159,7 @@ func (b *Builder) BuilderThread() {
 
 //
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
-	log.Printf("Starting job for session: '%s'\n", req.Session)
+	slog.Infof("Starting job for session: '%s'\n", req.Session)
 	sdir := path.Join("builds", req.Session)
 	os.Mkdir(sdir, 0777 | os.ModeDir)
 
@@ -169,14 +169,13 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 			log.Println(err)
 		}
 	}
-	//TODO: Make sure all deps are here!
-	//Wait in some way if they are not
+
 	var waitlist []chan *rmake.File
 	for _, dep := range req.BuildJob.Deps {
 		depPath := path.Join(sdir, dep)
 		_, err := os.Stat(depPath)
 		if err != nil {
-			log.Printf("Missing dependency: '%s'\n", dep)
+			slog.Infof("Missing dependency: '%s'\n", dep)
 			fch := b.WaitForFile(req.Session, dep)
 			waitlist = append(waitlist, fch)
 		}
@@ -196,16 +195,16 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	resp.Stdout = string(out)
 	resp.Session = req.Session
 	if err != nil {
-		log.Println(err)
+		slog.Error(err)
 		resp.Error = err.Error()
 		resp.Success = false
 	}
-	log.Println(resp.Stdout)
+	slog.Info(resp.Stdout)
 	b.SendToManager(resp)
 
 	if req.ResultAddress == "" {
 		//Actually... shouldnt happen
-		log.Println("Im the final node! no need to send.")
+		slog.Info("Im the final node! no need to send.")
 		return
 	}
 
@@ -217,20 +216,21 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	} else {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
+		//TODO: dont hardcode port here!!!
 		send, err := net.Dial("tcp", req.ResultAddress + ":11222")
 		if err != nil {
-			log.Println(err)
+			slog.Error(err)
 			//TODO: decide what to do if this happens
-			log.Println("ERROR: this is pretty bad... what do?")
+			slog.Error("ERROR: this is pretty bad... what do?")
 		}
 		outEnc = gob.NewEncoder(send)
 	}
 
 	fipath := path.Join("builds", req.Session)
-	log.Printf("Loading %s to send on.\n", req.BuildJob.Output)
+	slog.Info("Loading %s to send on.\n", req.BuildJob.Output)
 	fi,err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
-		log.Println("Failed to load output file!")
+		slog.Error("Failed to load output file!")
 	}
 
 
@@ -248,15 +248,15 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		i := interface{}(rfi)
 		err := outEnc.Encode(&i)
 		if err != nil {
-			log.Println(err)
+			slog.Error(err)
 		}
 	}
 
-	log.Printf("Job for session '%s' finished.\n", req.Session)
+	slog.Infof("Job for session '%s' finished.\n", req.Session)
 }
 
 func (b *Builder) Run() {
-	log.Println("Starting builder.")
+	slog.Info("Starting builder.")
 	b.Running = true
 	// Start Listeners
 	go b.ManagerListener()
@@ -273,7 +273,7 @@ func (b *Builder) Run() {
 
 	<-b.Halt
 
-	log.Println("Shutting down builder.")
+	slog.Info("Shutting down builder.")
 	b.Running = false
 	b.list.Close()
 	b.manager.Close()
@@ -288,7 +288,7 @@ func (b *Builder) ManagerListener() {
 	for {
 		mes, err := b.RecieveFromManager()
 		if err != nil {
-			log.Println(err)
+			slog.Error(err)
 			//TODO: switch on the error type and handle appropriately
 			panic(err)
 		}
@@ -302,7 +302,8 @@ func (b *Builder) ManagerSender() {
 		mes := <-b.outgoing
 		err := b.enc.Encode(&mes)
 		if err != nil {
-			log.Fatalln(err)
+			slog.Critical(err)
+			panic("Error!")
 		}
 	}
 }
