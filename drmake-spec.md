@@ -1,7 +1,7 @@
 #dRmake Specification
 
 ##Network Configuration
-An rmake build cluster has two components, the manager node, which handles distributing jobs and source code between the builder nodes, and the builder nodes which queue up jobs to be run and execute them, sending the resulting files where they need to be for the next step.
+An rmake build cluster has two components, the manager node, which handles distributing jobs and source code between the builder nodes, and the builder nodes which queue up jobs to be run and execute them, sending the resulting files where they need to be for the next step. The manager and the builder nodes must be on the same network in order to ensure fast connectivity between them. The client, on the other hand, can be situated anywhere, as long as the manager has an IP address that is accessible to it.
 
 ##Builds (Quick overview)
 Builds are started by a client program who creates a build package (described later) and sends it to the manager node. From there, the manager decides on a list of builder nodes that will participate in this build based on their current work loads, cpu usage and memory consumption. After choosing a node set, the manager distributes the jobs to their respective nodes.
@@ -44,5 +44,7 @@ As different build nodes complete their jobs, notifications of that event are se
 
 ##Roadmap for the future
 Makefile parsing
+build timing statistics
 Build optimization via analysis
 persistent build sessions (for unchanged file reuse)
+robust easy to use frontend (cli)
