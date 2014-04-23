@@ -238,7 +238,8 @@ func (m *Manager) HandleBuilderAnnouncement(bldr *rmake.BuilderAnnouncement, con
 		m.putUuid <- uuid
 		return
 	}
-	go bc.Listen()
+	go bc.Sender()
+	go bc.Listener()
 
 	//TODO: potential race condition here
 	m.queue.Push(bc)

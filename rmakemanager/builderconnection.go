@@ -53,16 +53,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	return bc
 }
 
-func (b *BuilderConnection) Listen() {
-	go func() {
-		for {
-			i := <-b.Outgoing
-			err := b.enc.Encode(&i)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}()
+func (b *BuilderConnection) Listener() {
 	var i interface{}
 	for {
 		err := b.dec.Decode(&i)
@@ -75,6 +66,16 @@ func (b *BuilderConnection) Listen() {
 		}
 		slog.Info("Recieved message from builder.")
 		b.Incoming <- i
+	}
+}
+
+func (b *BuilderConnection) Sender() {
+	for {
+		i := <-b.Outgoing
+		err := b.enc.Encode(&i)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
