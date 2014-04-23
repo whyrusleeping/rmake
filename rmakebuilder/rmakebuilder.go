@@ -104,13 +104,14 @@ func (b *Builder) FileSyncRoutine() {
 				slog.Infof("Now waiting on: '%s'", wpath)
 				b.waitfile[wpath] = req.Reply
 			case fi := <-b.newfiles:
-				ch, ok := b.waitfile[fi.Payload.Path]
+				wpath := path.Join("builds", fi.Session, fi.Payload.Path)
+				ch, ok := b.waitfile[wpath]
 				if !ok {
 					slog.Warnf("Recieved file nobody was asking for, session: '%s', path: '%s'",
 								fi.Session, fi.Payload.Path)
 				}
 				ch <- fi.Payload
-				delete(b.waitfile, fi.Session+fi.Payload.Path)
+				delete(b.waitfile, wpath)
 		}
 	}
 }
@@ -193,9 +194,9 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		outEnc = gob.NewEncoder(send)
 	}
 
-	fipath := path.Join("builds", req.Session, req.BuildJob.Output)
+	fipath := path.Join("builds", req.Session)
 	log.Printf("Loading %s to send on.\n", fipath)
-	fi,err := rmake.LoadFile(fipath)
+	fi,err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
 		log.Println("Failed to load output file!")
 	}

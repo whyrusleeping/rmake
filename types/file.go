@@ -20,8 +20,9 @@ type File struct {
 }
 
 //Load a file relative to the given directory
-func LoadFile(path string) (*File, error) {
-	inf, err := os.Stat(path)
+func LoadFile(dir, fipath string) (*File, error) {
+	fullpath := path.Join(dir, fipath)
+	inf, err := os.Stat(fullpath)
 	if err != nil {
 		return nil,err
 	}
@@ -32,10 +33,10 @@ func LoadFile(path string) (*File, error) {
 	}
 	*/
 	f := new(File)
-	f.Path = path
+	f.Path = fipath
 	f.Mode = inf.Mode()
 	//LastTime = time.Now()
-	cnts, err := ioutil.ReadFile(path)
+	cnts, err := ioutil.ReadFile(fullpath)
 	if err != nil {
 		return nil, err
 	}

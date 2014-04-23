@@ -26,7 +26,7 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 
 	p.Files = make(map[string]*rmake.File)
 	for _, v := range conf.Files {
-		f,err := rmake.LoadFile(v.Path)
+		f,err := rmake.LoadFile("", v.Path)
 		if err != nil {
 			fmt.Println(err)
 			continue
