@@ -152,6 +152,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 	}
 	if finaljob == nil {
 		log.Error("I have no idea what to do.")
+		//TODO: Determine how to handle this case
 		panic("confusion?!")
 	}
 	br := new(rmake.BuilderRequest)

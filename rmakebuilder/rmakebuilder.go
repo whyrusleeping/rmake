@@ -51,6 +51,7 @@ type Builder struct {
 	RunningJobs chan struct{}
 }
 
+//A struct to aid in waiting on dependency files
 type FileWait struct {
 	File string
 	Session string
@@ -288,9 +289,22 @@ func (b *Builder) ManagerListener() {
 	for {
 		mes, err := b.ReceiveFromManager()
 		if err != nil {
-			slog.Error(err)
-			//TODO: switch on the error type and handle appropriately
-			panic(err)
+			if err.Error() == "EOF" {
+				slog.Warn("Connection to manager closed. Attemping reconnect in 5 seconds.")
+				time.Sleep(time.Second * 5)
+				con,err := net.Dial("tcp", b.ManagerAddr)
+				if err != nil {
+					slog.Errorf("Reconnect failed: %s", err)
+					os.Exit(1)
+				}
+				b.manager = con
+				b.dec = gob.NewDecoder(con)
+				b.enc = gob.NewEncoder(con)
+				b.DoHandshake()
+				continue
+			} else {
+				panic(err)
+			}
 		}
 		b.incoming <- mes
 	}
