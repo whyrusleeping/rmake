@@ -70,11 +70,13 @@ func (m *Manager) MessageListener() {
 				fbr := new(rmake.FinalBuildResult)
 				fbr.Results = mes.Results
 				fbr.Session = mes.Session
+				fbr.Success = true
 				m.SendToClient(mes.Session, fbr)
 
 			case *rmake.JobFinishedMessage:
 				log.Infof("Job finished for session: %s", mes.Session)
 				//TODO, update build info
+
 				m.SendToClient(mes.Session, mes)
 
 			case *rmake.BuilderStatusUpdate:

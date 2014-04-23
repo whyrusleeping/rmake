@@ -1,7 +1,6 @@
 package rmake
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -21,11 +20,10 @@ type File struct {
 }
 
 //Load a file relative to the given directory
-func LoadFile(path string) *File {
+func LoadFile(path string) (*File, error) {
 	inf, err := os.Stat(path)
 	if err != nil {
-		fmt.Println(err)
-		return nil
+		return nil,err
 	}
 	/*
 	//TODO: worry about modtimes
@@ -33,18 +31,16 @@ func LoadFile(path string) *File {
 		return nil
 	}
 	*/
-	fmt.Printf("Sending '%s'\n", path)
 	f := new(File)
 	f.Path = path
 	f.Mode = inf.Mode()
 	//LastTime = time.Now()
 	cnts, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	f.Contents = cnts
-	return f
+	return f,nil
 }
 
 //Make sure all needed directories are created and write file to disk

@@ -15,6 +15,7 @@ import (
 	"reflect"
 
 	"github.com/whyrusleeping/rmake/types"
+	slog "github.com/cihub/seelog"
 )
 
 type Builder struct {
@@ -32,13 +33,26 @@ type Builder struct {
 	incoming chan interface{}
 	outgoing chan interface{}
 
+	//Some data structures to synchronize file transfers
+	waitfile map[string]chan *rmake.File
+	reqfilewait chan *FileWait
+	newfiles chan *rmake.RequiredFileMessage
+
 	mgrReconnect chan struct{}
 
 	Procs int
 	UUID  int
-	//Job Queue TODO: use this?
+
 	Halt   chan struct{}
+
+	//Job Queue TODO: use this?
 	JQueue chan *rmake.Job
+}
+
+type FileWait struct {
+	File string
+	Session string
+	Reply chan *rmake.File
 }
 
 func NewBuilder(listen string, manager string, nprocs int) *Builder {
@@ -68,15 +82,48 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.manager = mgr
 	b.enc = gob.NewEncoder(mgr)
 	b.dec = gob.NewDecoder(mgr)
+
 	b.incoming = make(chan interface{})
 	b.outgoing = make(chan interface{})
 
-	b.UpdateFrequency = time.Second * 15
+	b.newfiles = make(chan *rmake.RequiredFileMessage)
+	b.waitfile = make(map[string]chan *rmake.File)
+	b.reqfilewait = make(chan *FileWait)
+
+	b.UpdateFrequency = time.Second * 60
 	b.Halt = make(chan struct{})
 	b.mgrReconnect = make(chan struct{})
 	return b
 }
 
+func (b *Builder) FileSyncRoutine() {
+	for {
+		select {
+			case req := <-b.reqfilewait:
+				wpath := path.Join("builds", req.Session, req.File)
+				slog.Infof("Now waiting on: '%s'", wpath)
+				b.waitfile[wpath] = req.Reply
+			case fi := <-b.newfiles:
+				ch, ok := b.waitfile[fi.Payload.Path]
+				if !ok {
+					slog.Warnf("Recieved file nobody was asking for, session: '%s', path: '%s'",
+								fi.Session, fi.Payload.Path)
+				}
+				ch <- fi.Payload
+				delete(b.waitfile, fi.Session+fi.Payload.Path)
+		}
+	}
+}
+
+func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
+	fw := new(FileWait)
+	fw.File = file
+	fw.Session = session
+	fw.Reply = make(chan *rmake.File)
+
+	b.reqfilewait <- fw
+	return fw.Reply
+}
 
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	log.Printf("Starting job for session: '%s'\n", req.Session)
@@ -91,12 +138,21 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 	//TODO: Make sure all deps are here!
 	//Wait in some way if they are not
+	var waitlist []chan *rmake.File
 	for _, dep := range req.BuildJob.Deps {
 		depPath := path.Join(sdir, dep)
 		_, err := os.Stat(depPath)
 		if err != nil {
 			log.Printf("Missing dependency: '%s'\n", dep)
+			fch := b.WaitForFile(req.Session, dep)
+			waitlist = append(waitlist, fch)
 		}
+	}
+
+	for _,ch := range waitlist {
+		f := <-ch
+		slog.Infof("Got file we were waiting for: '%s'", f.Path)
+		f.Save(sdir)
 	}
 
 	resp := new(rmake.JobFinishedMessage)
@@ -139,21 +195,24 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	fipath := path.Join("builds", req.Session, req.BuildJob.Output)
 	log.Printf("Loading %s to send on.\n", fipath)
-	fi := rmake.LoadFile(fipath)
-	results := new(rmake.BuilderResult)
-	if fi == nil {
+	fi,err := rmake.LoadFile(fipath)
+	if err != nil {
 		log.Println("Failed to load output file!")
-	} else {
-		results.Results = append(results.Results, fi)
 	}
-
-	results.Session = req.Session
 
 
 	if outEnc == nil {
+		results := new(rmake.BuilderResult)
+		if fi != nil {
+			results.Results = append(results.Results, fi)
+		}
+		results.Session = req.Session
 		b.SendToManager(results)
 	} else {
-		i := interface{}(results)
+		rfi := new(rmake.RequiredFileMessage)
+		rfi.Session = req.Session
+		rfi.Payload = fi
+		i := interface{}(rfi)
 		err := outEnc.Encode(&i)
 		if err != nil {
 			log.Println(err)
@@ -173,6 +232,7 @@ func (b *Builder) Run() {
 	// Start message handler
 	go b.HandleMessages()
 	go b.ManagerSender()
+	go b.FileSyncRoutine()
 
 	// Start Heartbeat
 	go b.StartPublisher()
@@ -257,17 +317,17 @@ func (b *Builder) RecieveFromManager() (interface{}, error) {
 	return i, nil
 }
 
-// Handles all, but handshake message types
+// Handles all messages except handshake message types
 func (b *Builder) HandleMessage(i interface{}) {
 	switch message := i.(type) {
 	case *rmake.RequiredFileMessage:
 		log.Println("Recieved required file.")
 		//Get a file from another node
-		message.Payload.Save(path.Join("builds", message.Session))
+		b.newfiles <- message
 
 	case *rmake.BuilderRequest:
 		log.Println("Recieved builder request.")
-		b.RunJob(message)
+		go b.RunJob(message)
 
 	case *rmake.BuilderResult:
 		log.Println("Recieved builder result.")

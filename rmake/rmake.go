@@ -26,10 +26,12 @@ func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
 
 	p.Files = make(map[string]*rmake.File)
 	for _, v := range conf.Files {
-		f := rmake.LoadFile(v.Path)
-		if f != nil {
-			p.Files[v.Path] = f
+		f,err := rmake.LoadFile(v.Path)
+		if err != nil {
+			fmt.Println(err)
+			continue
 		}
+		p.Files[v.Path] = f
 	}
 	return p
 }
@@ -191,6 +193,9 @@ func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
 		case *rmake.BuilderResult:
 			fmt.Println("Got builder result.")
 			fmt.Printf("Got %d files back.", len(message.Results))
+		case *rmake.JobFinishedMessage:
+			fmt.Println("I SHOULDNT BE GETTING THIS.")
+			fmt.Println(message.Stdout)
 		default:
 			fmt.Println("Unknown Type.")
 			fmt.Println(reflect.TypeOf(message))
@@ -226,9 +231,14 @@ func (rmc *RMakeConf) DoBuild() error {
 	}
 
 	// What do we want to do with the FinalBuildResult?
-	// (Place holder, because go sucks and is dislikes unused variables)
 	if fbr.Success {
 		fmt.Printf("Success!\n")
+		for _,f := range fbr.Results {
+			err := f.Save("")
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
 	} else {
 		fmt.Printf("Error!\n")
 	}
