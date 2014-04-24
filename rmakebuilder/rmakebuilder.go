@@ -228,7 +228,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 
 	fipath := path.Join("builds", req.Session)
-	slog.Info("Loading %s to send on.\n", req.BuildJob.Output)
+	slog.Infof("Loading %s to send on.\n", req.BuildJob.Output)
 	fi,err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
 		slog.Error("Failed to load output file!")
@@ -353,7 +353,6 @@ func (b *Builder) SocketListener() {
 
 // Send a message to the manager
 func (b *Builder) SendToManager(i interface{}) {
-	log.Printf("Send to manager '%s'\n", reflect.TypeOf(i))
 	b.outgoing <- i
 }
 
