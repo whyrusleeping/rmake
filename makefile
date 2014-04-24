@@ -13,12 +13,22 @@ ifeq ($(OS), $(filter $(OS), linux darwin windows))
 	endif
 endif
 
+.PHONY: all clean test
+
 # Build everything
 all:
 	cd types && go install
 	cd rmake && go install
 	cd rmakebuilder && go install $(INSTALL_OPT)
 	cd rmakemanager && go install $(INSTALL_OPT)
+
+# Clean up files
+clean:
+	go clean
+	cd types && go clean
+	cd rmake && go clean
+	cd rmakebuilder && go clean
+	cd rmakemanager && go clean
 
 # Tests for rmake
 test:

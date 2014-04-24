@@ -1,18 +1,19 @@
 package main
 
 import (
-	"testing"
+	"encoding/gob"
 	"fmt"
 	"net"
-	"time"
 	"os"
+	"testing"
+	"time"
+
 	"github.com/whyrusleeping/rmake/types"
-	"encoding/gob"
 )
 
 //Test builder sending load updates
 func TestUpdates(t *testing.T) {
-	mgr,err := net.Listen("tcp", ":12344")
+	mgr, err := net.Listen("tcp", ":12344")
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +25,7 @@ func TestUpdates(t *testing.T) {
 		b.Run()
 	}()
 
-	con,err := mgr.Accept()
+	con, err := mgr.Accept()
 	if err != nil {
 		panic(err)
 	}
@@ -40,10 +41,10 @@ func TestUpdates(t *testing.T) {
 		switch i := i.(type) {
 		case *rmake.BuilderStatusUpdate:
 			/*
-			fmt.Println("Got update message!")
-			fmt.Printf("Queued Jobs: %d\n", i.QueuedJobs)
-			fmt.Printf("CPU load: %f\n", i.CPULoad)
-			fmt.Printf("Mem Usage: %f\n", i.MemUse)
+				fmt.Println("Got update message!")
+				fmt.Printf("Queued Jobs: %d\n", i.QueuedJobs)
+				fmt.Printf("CPU load: %f\n", i.CPULoad)
+				fmt.Printf("Mem Usage: %f\n", i.MemUse)
 			*/
 			fmt.Println(i)
 			recv++
@@ -61,14 +62,14 @@ func TestUpdates(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	fmt.Println("\nStarting build test.\n")
-	mgr,err := net.Listen("tcp", ":12334")
+	mgr, err := net.Listen("tcp", ":12334")
 	if err != nil {
 		panic(err)
 	}
 
 	go func() {
 		//Setup builder
-		b := NewBuilder(":12335", "localhost:12334",2)
+		b := NewBuilder(":12335", "localhost:12334", 2)
 		b.Run()
 	}()
 
@@ -87,7 +88,7 @@ func TestBuild(t *testing.T) {
 		j.BuildJob.Output = "a.out"
 		j.BuildJob.Deps = []string{"main.c"}
 		time.Sleep(time.Second)
-		buildCon,err := net.Dial("tcp", "localhost:12335")
+		buildCon, err := net.Dial("tcp", "localhost:12335")
 		if err != nil {
 			panic(err)
 		}
@@ -100,7 +101,7 @@ func TestBuild(t *testing.T) {
 		}
 	}()
 
-	con,err := mgr.Accept()
+	con, err := mgr.Accept()
 	if err != nil {
 		panic(err)
 	}
@@ -121,10 +122,10 @@ func TestBuild(t *testing.T) {
 		switch i := i.(type) {
 		case *rmake.BuilderStatusUpdate:
 			fmt.Println(i)
-		case *rmake.BuildFinishedMessage:
-			fmt.Println("Build Finished Message!")
-			fmt.Println(i.Stdout)
-			recv++
+		//case *rmake.BuildFinishedMessage:
+		//fmt.Println("Build Finished Message!")
+		//fmt.Println(i.Stdout)
+		//recv++
 		case *rmake.BuilderResult:
 			fmt.Println("Builder Result.")
 			recv++
@@ -137,14 +138,14 @@ func TestBuild(t *testing.T) {
 
 func TestHandshake(t *testing.T) {
 	fmt.Println("\nStarting build test.\n")
-	mgr,err := net.Listen("tcp", ":12340")
+	mgr, err := net.Listen("tcp", ":12340")
 	if err != nil {
 		panic(err)
 	}
 
 	success := make(chan struct{})
 	go func() {
-		b := NewBuilder(":12341", "localhost:12340",2)
+		b := NewBuilder(":12341", "localhost:12340", 2)
 		b.DoHandshake()
 		if err != nil {
 			panic(err)
@@ -153,7 +154,7 @@ func TestHandshake(t *testing.T) {
 		b.Stop()
 	}()
 
-	con,err := mgr.Accept()
+	con, err := mgr.Accept()
 	if err != nil {
 		panic(err)
 	}
@@ -174,10 +175,10 @@ func TestHandshake(t *testing.T) {
 		switch i := i.(type) {
 		case *rmake.BuilderStatusUpdate:
 			fmt.Println(i)
-		case *rmake.BuildFinishedMessage:
-			fmt.Println("Build Finished Message!")
-			fmt.Println(i.Stdout)
-			recv++
+		//case *rmake.BuildFinishedMessage:
+		//	fmt.Println("Build Finished Message!")
+		//	fmt.Println(i.Stdout)
+		//	recv++
 		case *rmake.BuilderResult:
 			fmt.Println("Builder Result.")
 			recv++
