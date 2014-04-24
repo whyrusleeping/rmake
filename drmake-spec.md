@@ -38,6 +38,8 @@ The build package has the following structure:
 		Files map[string]*File
 	}
 
+Jobs is a list of jobs as defined above. Arch and OS are the CPU architechture and operating system of the build target. Output is the name of the desired binary that will be built, and Files is a map of filenames to File objects. Files in this map are generally source files or other dependencies of the build.
+
 ##Manager (rmakemanager)
 The manager servers as an intermediary between the client and the builder servers who perform the build itself. The manager is responsible for scheduling which builder should perform which jobs based on their current load. 
 
@@ -56,6 +58,7 @@ When a build fails, due to poorly written code or other compiler errors, the man
 
 ##Builder (rmakebuilder)
 The builder is responsible for accepting jobs from the manager, performing them, and send the output either back to the manager, or to another builder node as part of a later job.
+When starting up a builder, you can specify a maximum number of processes to have running at any given time. For highest efficiency, let this number either be equal to, or one less than the number of logical processors on the build machine. Lower numbers can be used if this machine has other things it needs to be doing at the same time as building.
 
 ##Roadmap for the future
 Makefile parsing
