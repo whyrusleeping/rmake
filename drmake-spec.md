@@ -1,11 +1,14 @@
 #dRmake Specification
 
+##Goals
+The primary goal of rmake is to provide a lightning fast distributed build system for groups who work on large projects. We also aim to make using and configuring rmake as simple as possible, other tools that might fill the same niche can be a pain to handle so we are hoping to keep our interface familiar to any prospective users.
+
 ##Network Configuration
 An rmake build cluster has two components, the manager node, which handles distributing jobs and source code between the builder nodes, and the builder nodes which queue up jobs to be run and execute them, sending the resulting files where they need to be for the next step. The manager and the builder nodes must be on the same network in order to ensure fast connectivity between them. The client, on the other hand, can be situated anywhere, as long as the manager has an IP address that is accessible to it.
 
 ##Builds (Quick overview)
-Builds are started by a client program who creates a build package (described later) and sends it to the manager node. From there, the manager decides on a list of builder nodes that will participate in this build based on their current work loads, cpu usage and memory consumption. After choosing a node set, the manager distributes the jobs to their respective nodes.
-Currently rmake supports C and C++ style building, where a large number of object files are built independantly and sent to a final node for linking the final executable.
+Builds are started by a client program who creates a build package (described later) and sends it to the manager node. From there, the manager assigns each of the tasks required to perform the build to builder nodes in the cluster based on their current workload. Builder nodes keep a queue of tasks, referred to as jobs, and execute them and send the output where it is needed.
+Currently rmake supports C and C++ style building, where a large number of object files are built asynchronously and sent to a previously selected node for linking the final executable.
 Once the final executable is built it is sent from the builder node that linked it, to the manager node, and finally back to the client who initiated the build.
 
 ##Jobs

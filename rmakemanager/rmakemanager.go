@@ -134,6 +134,32 @@ func (m *Manager) ReleaseSession(session string) {
 
 // Allocate resources to the request
 //TODO: time this and other handlers for performance analytics
+/*Pseudocode for future implementation
+
+...
+//Start with
+assignJobs(finaljob)
+...
+
+func assignJobs(j job) {
+	j.sendTo(builders.GetNext())
+	j.assigned = true
+	for dep in j.deps {
+		if dep in filesfromclient {
+			continue
+		}
+		sub = jobsByOutput[dep]
+		if sub == nil {
+			panic("no such thing!")
+		}
+		if !sub.assigned {
+			assignJobs(sub)
+		}
+	}
+}
+
+This will ensure that the build dependency heirarchy is satisfied
+*/
 func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn) {
 	// handle the request
 	session := m.GetNewSession()
