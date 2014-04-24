@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 
 func init() {
 	gob.Register(&BuilderRequest{})
@@ -78,7 +78,7 @@ type BuilderRequest struct {
 	BuildJob *Job
 
 	Input []*File
-	Wait []string
+	Wait  []string
 	//The address of the node to send the output to
 	//empty string means keep it local
 	ResultAddress string
@@ -87,7 +87,7 @@ type BuilderRequest struct {
 }
 
 func (br *BuilderRequest) GetFile(fi string) *File {
-	for _,f := range br.Input {
+	for _, f := range br.Input {
 		if f.Path == fi {
 			return f
 		}
@@ -170,8 +170,8 @@ type RequiredFileMessage struct {
 //Sent periodically to the manager to inform it of the builders status
 //Builder -> Manager
 type BuilderStatusUpdate struct {
-	QueuedJobs int
+	QueuedJobs  int
 	RunningJobs int
-	CPULoad    float32
-	MemUse     float32
+	CPULoad     float32
+	MemUse      float32
 }

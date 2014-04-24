@@ -26,19 +26,6 @@ type Manager struct {
 	Incoming chan interface{}
 }
 
-type Session struct {
-	ID     string
-	Builds map[int]Build
-}
-
-type Build struct {
-	Session   string
-	TotalJobs int
-	JobsDone  int
-	ID        int
-	//List of builders?
-}
-
 // Make a new manager
 func NewManager(listname string) *Manager {
 	//Start the server socket
