@@ -17,8 +17,8 @@ import (
 	"github.com/whyrusleeping/rmake/types"
 )
 
-func NewManagerRequest(conf *RMakeConf) *rmake.ManagerRequest {
-	p := new(rmake.ManagerRequest)
+func NewManagerRequest(conf *RMakeConf) *rmake.BuildPackage {
+	p := new(rmake.BuildPackage)
 	p.Jobs = conf.Jobs
 	p.Arch = "Arch" //lol
 	p.OS = "Arch (the OS)"

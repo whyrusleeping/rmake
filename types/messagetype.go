@@ -10,7 +10,7 @@ const ProtocolVersion = 2
 func init() {
 	gob.Register(&BuilderRequest{})
 	gob.Register(&BuilderResult{})
-	gob.Register(&ManagerRequest{})
+	gob.Register(&BuildPackage{})
 	gob.Register(&FinalBuildResult{})
 	gob.Register(&RequiredFileMessage{})
 	gob.Register(&BuilderStatusUpdate{})
@@ -118,7 +118,7 @@ type BuilderResult struct {
 
 //A build package, gets sent to the manager to start a build
 //Client -> Manager
-type ManagerRequest struct {
+type BuildPackage struct {
 	//
 	Jobs []*Job
 	//
