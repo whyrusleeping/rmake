@@ -14,18 +14,24 @@ type RequestQueue struct {
 	rwmutex sync.RWMutex
 }
 
+func NewRequestQueue() *RequestQueue {
+	rq := new(RequestQueue)
+	rq.queue = make(chan *rmake.BuilderRequest)
+	return rq
+}
+
 // Push a request to the RequestQueue
 func (jq *RequestQueue) Push(br *rmake.BuilderRequest) {
-	jq.rwmutex.Lock()
+	jq.rwmutex.RLock()
 	jq.queue <- br
-	jq.rwmutex.Unlock()
+	jq.rwmutex.RUnlock()
 }
 
 // Pop a request from the RequestQueue
 func (jq *RequestQueue) Pop() *rmake.BuilderRequest {
-	jq.rwmutex.Lock()
+	jq.rwmutex.RLock()
 	p := <-jq.queue
-	jq.rwmutex.Unlock()
+	jq.rwmutex.RUnlock()
 	return p
 }
 

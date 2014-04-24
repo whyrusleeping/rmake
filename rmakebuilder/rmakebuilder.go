@@ -45,8 +45,9 @@ type Builder struct {
 
 	Halt chan struct{}
 
+	RequestQueue *RequestQueue
 	//Job Queue TODO: use this?
-	JQueue      chan *rmake.BuilderRequest
+	//JQueue      chan *rmake.BuilderRequest
 	RunningJobs chan struct{}
 }
 
@@ -94,7 +95,8 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.waitfile = make(map[string]chan *rmake.File)
 	b.reqfilewait = make(chan *FileWait)
 
-	b.JQueue = make(chan *rmake.BuilderRequest)
+	b.RequestQueue = NewRequestQueue()
+	//b.JQueue = make(chan *rmake.BuilderRequest)
 	b.RunningJobs = make(chan struct{}, nprocs)
 
 	b.UpdateFrequency = time.Second * 60
@@ -149,12 +151,10 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 //for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
-		select {
-		case work := <-b.JQueue:
+		work := b.RequestQueue.Pop():
 			b.RunningJobs <- struct{}{}
 			b.RunJob(work)
 			<-b.RunningJobs
-		}
 	}
 }
 
@@ -334,11 +334,13 @@ func (b *Builder) HandleMessages() {
 
 		case *rmake.BuilderRequest:
 			slog.Info("Received builder request.")
-			b.JQueue <- message
+			b.RequestQueue.Push(message)
+			//b.JQueue <- messag/e
 
 		case *rmake.BuilderResult:
 			slog.Info("Received builder result.")
 			b.HandleBuilderResult(message)
+
 		default:
 			slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
 		}
@@ -402,7 +404,8 @@ func (b *Builder) HandleMessage(i interface{}) {
 
 	case *rmake.BuilderRequest:
 		slog.Info("Received builder request.")
-		b.JQueue <- message
+		b.RequestQueue.Push(message)
+		//b.JQueue <- message
 
 	case *rmake.BuilderResult:
 		slog.Info("Received builder result.")
@@ -442,7 +445,7 @@ func (b *Builder) SendStatusUpdate() {
 	slog.Info("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
-	stat.QueuedJobs = len(b.JQueue)
+	stat.QueuedJobs = b.RequestQueue.Len() //len(b.JQueue)
 	stat.RunningJobs = len(b.RunningJobs)
 
 	b.SendToManager(stat)
