@@ -43,7 +43,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	bc.conn = c
 	bc.NumJobs = 0
 	bc.Manager = m
-	addr := c.RemoteAddr().String()
+	//addr := c.RemoteAddr().String()
 	//	bc.Hostaddr = strings.Split(addr, ":")[0]
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)

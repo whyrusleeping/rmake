@@ -44,6 +44,7 @@ type RMakeConf struct {
 	Output      string
 	Session     string
 	Vars        map[string]string
+	Verbose		bool
 	Compression string
 	ignore      []string `json:",omitempty"`
 }
@@ -207,6 +208,7 @@ func AwaitResult(c net.Conn) (*rmake.FinalBuildResult, error) {
 
 //Perform a build as specified by the rmake config file
 func (rmc *RMakeConf) DoBuild() error {
+	start := time.Now()
 	//Create a package
 	var inter interface{}
 	inter = NewManagerRequest(rmc)
@@ -221,7 +223,6 @@ func (rmc *RMakeConf) DoBuild() error {
 	if err != nil {
 		return err
 	}
-	//Make sure all data gets flushed through
 
 	// Wait for the result
 	var fbr *rmake.FinalBuildResult
@@ -243,6 +244,10 @@ func (rmc *RMakeConf) DoBuild() error {
 		fmt.Printf("Error!\n")
 	}
 
+	took := time.Now().Sub(start)
+	if rmc.Verbose {
+		fmt.Printf("Build took %s\n", took.String())
+	}
 	return nil
 }
 

@@ -138,6 +138,32 @@ func (m *Manager) ReleaseSession(session string) {
 
 // Allocate resources to the request
 //TODO: time this and other handlers for performance analytics
+/*Pseudocode for future implementation
+
+...
+//Start with
+assignJobs(finaljob)
+...
+
+func assignJobs(j job) {
+	j.sendTo(builders.GetNext())
+	j.assigned = true
+	for dep in j.deps {
+		if dep in filesfromclient {
+			continue
+		}
+		sub = jobsByOutput[dep]
+		if sub == nil {
+			panic("no such thing!")
+		}
+		if !sub.assigned {
+			assignJobs(sub)
+		}
+	}
+}
+
+This will ensure that the build dependency heirarchy is satisfied
+*/
 func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn) {
 	// handle the request
 	session := m.GetNewSession()
@@ -156,6 +182,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 	}
 	if finaljob == nil {
 		log.Error("I have no idea what to do.")
+		//TODO: Determine how to handle this case
 		panic("confusion?!")
 	}
 	br := new(rmake.BuilderRequest)
@@ -173,7 +200,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 		}
 	}
 
-	log.Infof("Sending job to '%s'\n", final.Hostname)
+	log.Infof("Sending job to '%s'\n", final.ListenerAddr)
 	final.Outgoing <- br
 
 	//assign each job to a builder
@@ -185,7 +212,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 		br.BuildJob = j
 
 		br.Session = session
-		br.ResultAddress = ListenerAddr
+		br.ResultAddress = final.ListenerAddr
 
 		for _, dep := range j.Deps {
 			depfi, ok := request.Files[dep]

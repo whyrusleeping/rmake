@@ -51,6 +51,7 @@ type Builder struct {
 	RunningJobs chan struct{}
 }
 
+//A struct to aid in waiting on dependency files
 type FileWait struct {
 	File    string
 	Session string
@@ -217,7 +218,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
 		//TODO: dont hardcode port here!!!
-		send, err := net.Dial("tcp", req.ResultAddress)
+		send, err := net.Dial("tcp", req.ResultAddress+":11222")
 		if err != nil {
 			slog.Error(err)
 			//TODO: decide what to do if this happens
@@ -227,7 +228,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	}
 
 	fipath := path.Join("builds", req.Session)
-	slog.Info("Loading %s to send on.\n", req.BuildJob.Output)
+	slog.Infof("Loading %s to send on.\n", req.BuildJob.Output)
 	fi, err := rmake.LoadFile(fipath, req.BuildJob.Output)
 	if err != nil {
 		slog.Error("Failed to load output file!")
@@ -286,9 +287,22 @@ func (b *Builder) ManagerListener() {
 	for {
 		mes, err := b.ReceiveFromManager()
 		if err != nil {
-			slog.Error(err)
-			//TODO: switch on the error type and handle appropriately
-			panic(err)
+			if err.Error() == "EOF" {
+				slog.Warn("Connection to manager closed. Attemping reconnect in 5 seconds.")
+				time.Sleep(time.Second * 5)
+				con, err := net.Dial("tcp", b.ManagerAddr)
+				if err != nil {
+					slog.Errorf("Reconnect failed: %s", err)
+					os.Exit(1)
+				}
+				b.manager = con
+				b.dec = gob.NewDecoder(con)
+				b.enc = gob.NewEncoder(con)
+				b.DoHandshake()
+				continue
+			} else {
+				panic(err)
+			}
 		}
 		b.incoming <- mes
 	}
@@ -324,7 +338,7 @@ func (b *Builder) HandleMessages() {
 
 		case *rmake.BuilderResult:
 			slog.Info("Received builder result.")
-			b.HandleBuilderResult(message.(*rmake.BuilderResult))
+			b.HandleBuilderResult(message)
 		default:
 			slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
 		}
@@ -332,15 +346,14 @@ func (b *Builder) HandleMessages() {
 }
 
 func (b *Builder) HandleBuilderResult(m *rmake.BuilderResult) {
-	sdir := path.Join("builds", message.Session)
-	for _, f := range message.Results {
+	sdir := path.Join("builds", m.Session)
+	for _, f := range m.Results {
 		err := f.Save(sdir)
 		if err != nil {
 			slog.Error("Error saving file!")
 			slog.Error(err)
 		}
 	}
-
 }
 
 //Listen for and handle new connections
@@ -377,6 +390,34 @@ func (b *Builder) ReceiveFromManager() (interface{}, error) {
 		return nil, err
 	}
 	return i, nil
+}
+
+// Handles all messages except handshake message types
+func (b *Builder) HandleMessage(i interface{}) {
+	switch message := i.(type) {
+	case *rmake.RequiredFileMessage:
+		log.Println("Received required file.")
+		//Get a file from another node
+		b.newfiles <- message
+
+	case *rmake.BuilderRequest:
+		slog.Info("Received builder request.")
+		b.JQueue <- message
+
+	case *rmake.BuilderResult:
+		slog.Info("Received builder result.")
+		sdir := path.Join("builds", message.Session)
+		for _, f := range message.Results {
+			err := f.Save(sdir)
+			if err != nil {
+				slog.Error("Error saving file!")
+				slog.Error(err)
+			}
+		}
+
+	default:
+		slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
+	}
 }
 
 // Handles a connection from the listener
