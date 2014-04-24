@@ -37,6 +37,7 @@ func (jq *RequestQueue) Len() int {
 	return l
 }
 
+// Get the length of the queue in an unsafe manner
 func (jq *RequestQueue) lenUnsafe() int {
 	return len(jq.queue)
 }
