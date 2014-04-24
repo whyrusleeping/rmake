@@ -217,7 +217,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
 		//TODO: dont hardcode port here!!!
-		send, err := net.Dial("tcp", req.ResultAddress+":11222")
+		send, err := net.Dial("tcp", req.ResultAddress)
 		if err != nil {
 			slog.Error(err)
 			//TODO: decide what to do if this happens
@@ -324,19 +324,23 @@ func (b *Builder) HandleMessages() {
 
 		case *rmake.BuilderResult:
 			slog.Info("Received builder result.")
-			sdir := path.Join("builds", message.Session)
-			for _, f := range message.Results {
-				err := f.Save(sdir)
-				if err != nil {
-					slog.Error("Error saving file!")
-					slog.Error(err)
-				}
-			}
-
+			b.HandleBuilderResult(message.(*rmake.BuilderResult))
 		default:
 			slog.Warnf("Received invalid message type. '%s'", reflect.TypeOf(message))
 		}
 	}
+}
+
+func (b *Builder) HandleBuilderResult(m *rmake.BuilderResult) {
+	sdir := path.Join("builds", message.Session)
+	for _, f := range message.Results {
+		err := f.Save(sdir)
+		if err != nil {
+			slog.Error("Error saving file!")
+			slog.Error(err)
+		}
+	}
+
 }
 
 //Listen for and handle new connections

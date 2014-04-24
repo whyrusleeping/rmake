@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/gob"
 	"net"
-	"strings"
 
 	slog "github.com/cihub/seelog"
 )
@@ -45,7 +44,7 @@ func NewBuilderConnection(c net.Conn, la string, uuid int, hn string, m *Manager
 	bc.NumJobs = 0
 	bc.Manager = m
 	addr := c.RemoteAddr().String()
-	bc.Hostname = strings.Split(addr, ":")[0]
+	//	bc.Hostaddr = strings.Split(addr, ":")[0]
 	bc.enc = gob.NewEncoder(c)
 	bc.dec = gob.NewDecoder(c)
 	bc.Outgoing = make(chan interface{})

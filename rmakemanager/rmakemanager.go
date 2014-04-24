@@ -1,39 +1,43 @@
 package main
 
 import (
-	"flag"
-	"net"
+	"crypto/rand"
 	"encoding/gob"
 	"encoding/hex"
-	"crypto/rand"
+	"flag"
+	"net"
 
 	"reflect"
 
-	"github.com/whyrusleeping/rmake/types"
 	log "github.com/cihub/seelog"
+	"github.com/whyrusleeping/rmake/types"
 )
 
 // Main manager type, basically globals right now
 type Manager struct {
-	getUuid chan int
-	putUuid chan int
-	bcMap   map[int]*BuilderConnection
-	list    net.Listener
-	queue	*BuilderQueue
+	getUuid  chan int
+	putUuid  chan int
+	bcMap    map[int]*BuilderConnection
+	list     net.Listener
+	queue    *BuilderQueue
 	sessions map[string]chan interface{}
 
 	//Messages coming in to the manager
 	Incoming chan interface{}
 }
 
-type Build struct {
-	Session string
-	TotalJobs int
-	JobsDone int
-
-	//List of builders?
+type Session struct {
+	ID     string
+	Builds map[int]Build
 }
 
+type Build struct {
+	Session   string
+	TotalJobs int
+	JobsDone  int
+	ID        int
+	//List of builders?
+}
 
 // Make a new manager
 func NewManager(listname string) *Manager {
@@ -71,27 +75,27 @@ func (m *Manager) MessageListener() {
 	for {
 		mes := <-m.Incoming
 		switch mes := mes.(type) {
-			case *rmake.BuildStatus:
-				log.Info("Build Status Update.")
-				log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
-			case *rmake.BuilderResult:
-				fbr := new(rmake.FinalBuildResult)
-				fbr.Results = mes.Results
-				fbr.Session = mes.Session
-				fbr.Success = true
-				m.SendToClient(mes.Session, fbr)
+		case *rmake.BuildStatus:
+			log.Info("Build Status Update.")
+			log.Infof("Session: %d Completion: %f", mes.Session, mes.PercentComplete)
+		case *rmake.BuilderResult:
+			fbr := new(rmake.FinalBuildResult)
+			fbr.Results = mes.Results
+			fbr.Session = mes.Session
+			fbr.Success = true
+			m.SendToClient(mes.Session, fbr)
 
-			case *rmake.JobFinishedMessage:
-				log.Infof("Job finished for session: %s", mes.Session)
-				//TODO, update build info
+		case *rmake.JobFinishedMessage:
+			log.Infof("Job finished for session: %s", mes.Session)
+			//TODO, update build info
 
-				m.SendToClient(mes.Session, mes)
+			m.SendToClient(mes.Session, mes)
 
-			case *rmake.BuilderStatusUpdate:
-				log.Info("Builder updated load")
-			default:
-				log.Warn("Unrecognized message type")
-				log.Warn(reflect.TypeOf(mes))
+		case *rmake.BuilderStatusUpdate:
+			log.Info("Builder updated load")
+		default:
+			log.Warn("Unrecognized message type")
+			log.Warn(reflect.TypeOf(mes))
 		}
 	}
 }
@@ -145,7 +149,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 
 	//Find the 'final' job in our list
 	var finaljob *rmake.Job
-	for _,j := range request.Jobs {
+	for _, j := range request.Jobs {
 		if request.Output == j.Output {
 			finaljob = j
 		}
@@ -156,10 +160,10 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 	}
 	br := new(rmake.BuilderRequest)
 	br.BuildJob = finaljob
-	br.Session = session //TODO: method of creating and tracking sessions?
+	br.Session = session         //TODO: method of creating and tracking sessions?
 	br.ResultAddress = "manager" //Key string, recognized by builder
 
-	for _,dep := range finaljob.Deps {
+	for _, dep := range finaljob.Deps {
 		depfi, ok := request.Files[dep]
 		if !ok {
 			log.Infof("final builder will need to wait on %s\n", dep)
@@ -172,9 +176,8 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 	log.Infof("Sending job to '%s'\n", final.Hostname)
 	final.Outgoing <- br
 
-
 	//assign each job to a builder
-	for _,j := range request.Jobs {
+	for _, j := range request.Jobs {
 		if j == finaljob {
 			continue
 		}
@@ -182,9 +185,9 @@ func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn
 		br.BuildJob = j
 
 		br.Session = session
-		br.ResultAddress = final.Hostname
+		br.ResultAddress = ListenerAddr
 
-		for _,dep := range j.Deps {
+		for _, dep := range j.Deps {
 			depfi, ok := request.Files[dep]
 			if !ok {
 				log.Infof("Builder will need to wait on %s\n", dep)
