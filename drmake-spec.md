@@ -66,3 +66,4 @@ build timing statistics
 Build optimization via analysis
 persistent build sessions (for unchanged file reuse)
 robust easy to use frontend (cli)
+automatic dependency resolution

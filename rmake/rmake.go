@@ -162,7 +162,7 @@ func (rmc *RMakeConf) Status() error {
 // Prints a build status
 func PrintBuildStatus(status *rmake.BuildStatus) {
 	fmt.Printf("%s\n", status.Message)
-	fmt.Printf("Percent Complete: %d\n", status.PercentComplete)
+	fmt.Printf("Percent Complete: %f%%\n", status.PercentComplete)
 }
 
 // Processes feed back as it comes in
