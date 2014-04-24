@@ -286,9 +286,9 @@ func (m *Manager) HandleBuilderStatusUpdate(b *BuilderConnection, bsu *rmake.Bui
 	//...
 
 	if b.H() > cur {
-		m.queue.percDown(b.Index)
+		m.queue.PercDown(b.Index)
 	} else if b.H() < cur {
-		m.queue.percUp(b.Index)
+		m.queue.PercUp(b.Index)
 	}
 }
 
