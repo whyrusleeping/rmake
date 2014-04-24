@@ -164,7 +164,7 @@ func assignJobs(j job) {
 
 This will ensure that the build dependency heirarchy is satisfied
 */
-func (m *Manager) HandleManagerRequest(request *rmake.ManagerRequest, c net.Conn) {
+func (m *Manager) HandleManagerRequest(request *rmake.BuildPackage, c net.Conn) {
 	// handle the request
 	session := m.GetNewSession()
 
@@ -311,7 +311,7 @@ func (m *Manager) HandleConnection(c net.Conn) {
 	}
 
 	switch message := gobint.(type) {
-	case *rmake.ManagerRequest:
+	case *rmake.BuildPackage:
 		log.Info("Manager Request")
 		m.HandleManagerRequest(message, c)
 	case *rmake.BuilderAnnouncement:

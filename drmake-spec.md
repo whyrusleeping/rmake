@@ -28,6 +28,15 @@ The command field specifies the base command that will be run (i.e. gcc or clang
 
 ##Client (rmake)
 The client program parses in an rmake configuration file created either by hand or with the rmake tool itself and uses it to create and send a build package to an rmake manager. 
+The build package has the following structure:
+
+	type BuildPackage struct {
+		Jobs []*Job
+		Arch string
+		OS string
+		Output string
+		Files map[string]*File
+	}
 
 ##Manager (rmakemanager)
 The manager servers as an intermediary between the client and the builder servers who perform the build itself. The manager is responsible for scheduling which builder should perform which jobs based on their current load. 
@@ -46,6 +55,7 @@ When a client connects to the manager, the manager creates a session ID for it. 
 When a build fails, due to poorly written code or other compiler errors, the manager notifies all the builders that they should stop working on that build. And then notifies the client that their build has failed, complete with compiler error messages.
 
 ##Builder (rmakebuilder)
+The builder is responsible for accepting jobs from the manager, performing them, and send the output either back to the manager, or to another builder node as part of a later job.
 
 ##Roadmap for the future
 Makefile parsing
