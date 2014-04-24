@@ -46,6 +46,7 @@ type RMakeConf struct {
 	Vars        map[string]string
 	Verbose		bool
 	Compression string
+
 	ignore      []string `json:",omitempty"`
 }
 

@@ -54,16 +54,16 @@ As different build nodes complete their jobs, notifications of that event are se
 When a client connects to the manager, the manager creates a session ID for it. This session ID is used to mark jobs on the builders so that they can talk to each other more easily. Currently, sessions IDs are not reused, but in the future we will use them to speed up builds by only rebuilding files changes since the last build.
 
 ###Build Failures
-When a build fails, due to poorly written code or other compiler errors, the manager notifies all the builders that they should stop working on that build. And then notifies the client that their build has failed, complete with compiler error messages.
+When a build fails, due to poorly written code or other compiler errors, the manager notifies all the builders that they should stop working on that build, the builders the go through their queue of jobs and remove any associated with that build. And then notifies the client that their build has failed, complete with compiler error messages.
 
 ##Builder (rmakebuilder)
 The builder is responsible for accepting jobs from the manager, performing them, and send the output either back to the manager, or to another builder node as part of a later job.
 When starting up a builder, you can specify a maximum number of processes to have running at any given time. For highest efficiency, let this number either be equal to, or one less than the number of logical processors on the build machine. Lower numbers can be used if this machine has other things it needs to be doing at the same time as building.
 
 ##Roadmap for the future
-Makefile parsing
-build timing statistics
-Build optimization via analysis
-persistent build sessions (for unchanged file reuse)
-robust easy to use frontend (cli)
-automatic dependency resolution
+- Makefile parsing
+- build timing statistics
+- Build optimization via analysis
+- persistent build sessions (for unchanged file reuse)
+- robust easy to use frontend (cli)
+- automatic dependency resolution
