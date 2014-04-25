@@ -1,10 +1,8 @@
 {
 	"Server": "",
-	"Files": null,
-	"Command": "",
-	"Args": null,
 	"Output": "",
 	"Session": "",
 	"Vars": {},
+	"Verbose": false,
 	"Compression": ""
 }
