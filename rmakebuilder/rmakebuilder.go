@@ -151,10 +151,10 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 //for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
-		work := b.RequestQueue.Pop():
-			b.RunningJobs <- struct{}{}
-			b.RunJob(work)
-			<-b.RunningJobs
+		work := b.RequestQueue.Pop()
+		b.RunningJobs <- struct{}{}
+		b.RunJob(work)
+		<-b.RunningJobs
 	}
 }
 
