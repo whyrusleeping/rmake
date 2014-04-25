@@ -75,8 +75,12 @@ func (m *Manager) MessageListener() {
 		case *rmake.JobFinishedMessage:
 			log.Infof("Job finished for session: %s", mes.Session)
 			//TODO, update build info
+			bs := new(rmake.BuildStatus)
+			bs.Message = mes.Stdout
+			bs.Session = mes.Session
+			bs.PercentComplete = 0.5 //TODO: actually calculate this
 
-			m.SendToClient(mes.Session, mes)
+			m.SendToClient(mes.Session, bs)
 
 		case *rmake.BuilderStatusUpdate:
 			log.Info("Builder updated load")
@@ -308,8 +312,6 @@ func (m *Manager) HandleConnection(c net.Conn) {
 		log.Info(reflect.TypeOf(message))
 		log.Info("Unknown Type.")
 	}
-
-	return
 }
 
 func (m *Manager) Start() {
@@ -325,7 +327,6 @@ func (m *Manager) Start() {
 	}
 }
 
-// main
 func main() {
 	//Listens on port 11221 by default
 	var listname string

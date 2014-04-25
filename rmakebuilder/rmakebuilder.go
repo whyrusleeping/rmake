@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -63,8 +62,8 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	// Setup manager connection
 	mgr, err := net.Dial("tcp", manager)
 	if err != nil {
-		log.Println(err)
-		log.Println("Could not connect to manager.")
+		slog.Error(err)
+		slog.Error("Could not connect to manager.")
 		return nil
 	}
 
@@ -72,7 +71,8 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	list, err := net.Listen("tcp", listen)
 	if err != nil {
 		mgr.Close()
-		log.Panic(err)
+		slog.Critical(err)
+		return nil
 	}
 
 	//Make sure build directory exists
@@ -167,7 +167,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	for _, f := range req.Input {
 		err := f.Save(sdir)
 		if err != nil {
-			log.Println(err)
+			slog.Error(err)
 		}
 	}
 
@@ -217,10 +217,10 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	} else {
 		//Send to other builder
 		fmt.Printf("Sending output to: %s\n", req.ResultAddress)
-		//TODO: dont hardcode port here!!!
 		send, err := net.Dial("tcp", req.ResultAddress)
 		if err != nil {
 			slog.Error(err)
+			slog.Error("Given incorrection information by manager.")
 			//TODO: decide what to do if this happens
 			slog.Error("ERROR: this is pretty bad... what do?")
 		}
@@ -328,7 +328,7 @@ func (b *Builder) HandleMessages() {
 		m := <-b.incoming
 		switch message := m.(type) {
 		case *rmake.RequiredFileMessage:
-			log.Println("Received required file.")
+			slog.Info("Received required file.")
 			//Get a file from another node
 			b.newfiles <- message
 
@@ -363,13 +363,13 @@ func (b *Builder) SocketListener() {
 	for {
 		con, err := b.list.Accept()
 		if err != nil {
-			log.Println(err)
+			slog.Error(err)
 			if b.Running {
 				//Diagnose?
-				log.Printf("Listener Error: %s\n", err)
+				slog.Errorf("Listener Error: %s", err)
 				continue
 			} else {
-				log.Println("Shutting down server socket...")
+				slog.Error("Shutting down server socket...")
 				return
 			}
 		}
@@ -379,7 +379,7 @@ func (b *Builder) SocketListener() {
 
 // Send a message to the manager
 func (b *Builder) SendToManager(i interface{}) {
-	log.Printf("Send to manager '%s'\n", reflect.TypeOf(i))
+	slog.Infof("Send to manager '%s'", reflect.TypeOf(i))
 	b.outgoing <- i
 }
 
@@ -387,7 +387,7 @@ func (b *Builder) SendToManager(i interface{}) {
 func (b *Builder) ReceiveFromManager() (interface{}, error) {
 	var i interface{}
 	err := b.dec.Decode(&i)
-	fmt.Println("Received from manager.")
+	slog.Info("Received from manager.")
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +398,7 @@ func (b *Builder) ReceiveFromManager() (interface{}, error) {
 func (b *Builder) HandleMessage(i interface{}) {
 	switch message := i.(type) {
 	case *rmake.RequiredFileMessage:
-		log.Println("Received required file.")
+		slog.Info("Received required file.")
 		//Get a file from another node
 		b.newfiles <- message
 
@@ -427,12 +427,12 @@ func (b *Builder) HandleMessage(i interface{}) {
 // This could come from another builder.
 // Possibly from the manager too, but most likely another builder.
 func (b *Builder) HandleConnection(con net.Conn) {
-	log.Printf("Handling new connection from %s\n", con.RemoteAddr().String())
+	slog.Info("Handling new connection from %s", con.RemoteAddr().String())
 	dec := gob.NewDecoder(con)
 	var i interface{}
 	err := dec.Decode(&i)
 	if err != nil {
-		log.Println(err)
+		slog.Error(err)
 		return
 	}
 	//b.HandleMessage(i)
@@ -442,14 +442,11 @@ func (b *Builder) HandleConnection(con net.Conn) {
 }
 
 func (b *Builder) SendStatusUpdate() {
-	//TODO: get actual system information
-	log.Println("Sending system load update!")
+	slog.Info("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
 	stat.QueuedJobs = b.RequestQueue.Len() //len(b.JQueue)
 	stat.RunningJobs = len(b.RunningJobs)
-	stat.MemUse = 0
-	log.Println(stat)
 
 	b.SendToManager(stat)
 }
@@ -465,22 +462,24 @@ func (b *Builder) StartPublisher() {
 	}
 }
 
-func (b *Builder) DoHandshake() {
-	log.Printf("Starting Handshake\n")
+func (b *Builder) DoHandshake() error {
+	slog.Info("Starting Handshake")
 
 	host, err := os.Hostname()
 	if err != nil {
-		log.Panic(err)
+		slog.Critical(err)
+		return err
 	}
 
 	var i interface{}
 	i = rmake.NewBuilderAnnouncement(host, b.ListenerAddr)
 	b.enc.Encode(&i)
-	log.Printf("Sent Announcement\n")
+	slog.Info("Sent Announcement")
 
 	inter, err := b.ReceiveFromManager()
 	if err != nil {
-		log.Panic(err)
+		slog.Critical(err)
+		return err
 	}
 
 	var ack *rmake.ManagerAcknowledge
@@ -488,19 +487,23 @@ func (b *Builder) DoHandshake() {
 	case *rmake.ManagerAcknowledge:
 		ack = inter
 	default:
-		log.Panic(errors.New("Error, recieved unexpected type in handshake.\n"))
+		err := errors.New("Error, recieved unexpected type in handshake.")
+		slog.Error(err)
+		return err
 	}
 
 	if ack.Success {
 		b.UUID = ack.UUID
-		log.Printf("Handshake Complete, new UUID: %d\n", b.UUID)
+		slog.Infof("Handshake Complete, new UUID: %d", b.UUID)
 	}
+	return nil
 }
 
 func main() {
 	var listname string
 	var manager string
 	var procs int
+	var showhelp bool
 	// Arguement parsing
 	// Listen on ip and port
 	flag.StringVar(&listname, "listen", ":11222",
@@ -514,8 +517,14 @@ func main() {
 		"Address and port of manager node (shorthand)")
 	// Avaliable processors
 	flag.IntVar(&procs, "p", 2, "Number of processors to use.")
+
+	flag.BoolVar(&showhelp, "h", false, "Show help")
 	flag.Parse()
-	flag.PrintDefaults()
+
+	if showhelp {
+		fmt.Println("Usage: %s -[l|listen] \"address to listen on\" -[m|manager] \"address of manager\"")
+		return
+	}
 
 	fmt.Println("rmakebuilder")
 	if b := NewBuilder(listname, manager, procs); b != nil {
