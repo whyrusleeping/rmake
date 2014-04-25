@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/gob"
 	"encoding/hex"
-	"flag"
 	"net"
 
 	"reflect"
@@ -325,21 +324,4 @@ func (m *Manager) Start() {
 		//Handle clients in separate 'thread'
 		go m.HandleConnection(con)
 	}
-}
-
-func Run() {
-	//Listens on port 11221 by default
-	var listname string
-	// Arguement parsing
-	flag.StringVar(&listname,
-		"listname", ":11221", "The ip and or port to listen on")
-	flag.StringVar(&listname,
-		"l", ":11221", "The ip and or port to listen on (shorthand)")
-
-	flag.Parse()
-
-	log.Info("rmakemanager")
-
-	manager := NewManager(listname)
-	manager.Start()
 }
