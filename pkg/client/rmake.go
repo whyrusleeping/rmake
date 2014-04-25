@@ -252,27 +252,6 @@ func (rmc *RMakeConf) DoBuild() error {
 	return nil
 }
 
-/*
-//Wrap the given writer in a gzip layer
-//level of compression specified in config
-func (rmc *RMakeConf) Gzipper(w io.Writer) *gzip.Writer {
-	complev := gzip.DefaultCompression
-	switch rmc.Compression {
-	case "best":
-		complev = gzip.BestCompression
-	case "none":
-		complev = gzip.NoCompression
-	case "speed":
-		complev = gzip.BestSpeed
-	}
-	zipper, err := gzip.NewWriterLevel(w, complev)
-	if err != nil {
-		panic(err)
-	}
-	return zipper
-}
-*/
-
 func LoadRMakeConf(file string) (*RMakeConf, error) {
 	fi, err := os.Open(file)
 	if err != nil {

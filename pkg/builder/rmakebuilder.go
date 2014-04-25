@@ -45,8 +45,6 @@ type Builder struct {
 	Halt chan struct{}
 
 	RequestQueue *RequestQueue
-	//Job Queue TODO: use this?
-	//JQueue      chan *rmake.BuilderRequest
 	RunningJobs chan struct{}
 }
 
@@ -95,7 +93,6 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.reqfilewait = make(chan *FileWait)
 
 	b.RequestQueue = NewRequestQueue()
-	//b.JQueue = make(chan *rmake.BuilderRequest)
 	b.RunningJobs = make(chan struct{}, nprocs)
 
 	b.UpdateFrequency = time.Second * 60
@@ -334,7 +331,6 @@ func (b *Builder) HandleMessages() {
 		case *rmake.BuilderRequest:
 			slog.Info("Received builder request.")
 			b.RequestQueue.Push(message)
-			//b.JQueue <- messag/e
 
 		case *rmake.BuilderResult:
 			slog.Info("Received builder result.")
@@ -378,7 +374,6 @@ func (b *Builder) SocketListener() {
 
 // Send a message to the manager
 func (b *Builder) SendToManager(i interface{}) {
-	slog.Infof("Send to manager '%s'", reflect.TypeOf(i))
 	b.outgoing <- i
 }
 
@@ -404,7 +399,6 @@ func (b *Builder) HandleMessage(i interface{}) {
 	case *rmake.BuilderRequest:
 		slog.Info("Received builder request.")
 		b.RequestQueue.Push(message)
-		//b.JQueue <- message
 
 	case *rmake.BuilderResult:
 		slog.Info("Received builder result.")
@@ -426,7 +420,7 @@ func (b *Builder) HandleMessage(i interface{}) {
 // This could come from another builder.
 // Possibly from the manager too, but most likely another builder.
 func (b *Builder) HandleConnection(con net.Conn) {
-	slog.Info("Handling new connection from %s", con.RemoteAddr().String())
+	slog.Infof("Handling new connection from %s", con.RemoteAddr().String())
 	dec := gob.NewDecoder(con)
 	var i interface{}
 	err := dec.Decode(&i)
@@ -434,7 +428,7 @@ func (b *Builder) HandleConnection(con net.Conn) {
 		slog.Error(err)
 		return
 	}
-	//b.HandleMessage(i)
+
 	// We'll only handle one message ber connection
 	b.incoming <- i
 	con.Close()
@@ -444,7 +438,7 @@ func (b *Builder) SendStatusUpdate() {
 	slog.Info("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
-	stat.QueuedJobs = b.RequestQueue.Len() //len(b.JQueue)
+	stat.QueuedJobs = b.RequestQueue.Len()
 	stat.RunningJobs = len(b.RunningJobs)
 
 	b.SendToManager(stat)
