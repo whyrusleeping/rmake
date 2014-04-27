@@ -12,11 +12,13 @@ type RequestQueue struct {
 	queue chan *rmake.BuilderRequest
 	// The mutex for locking
 	rwmutex sync.RWMutex
+	open bool
 }
 
 func NewRequestQueue() *RequestQueue {
 	rq := new(RequestQueue)
-	rq.queue = make(chan *rmake.BuilderRequest)
+	rq.queue = make(chan *rmake.BuilderRequest, 64)
+	rq.open = true
 	return rq
 }
 
@@ -28,11 +30,14 @@ func (jq *RequestQueue) Push(br *rmake.BuilderRequest) {
 }
 
 // Pop a request from the RequestQueue
-func (jq *RequestQueue) Pop() *rmake.BuilderRequest {
+func (jq *RequestQueue) Pop() (*rmake.BuilderRequest, bool) {
 	jq.rwmutex.RLock()
+	if !jq.open {
+		return nil,false
+	}
 	p := <-jq.queue
 	jq.rwmutex.RUnlock()
-	return p
+	return p,true
 }
 
 // The length of the RequestQueue
@@ -41,6 +46,12 @@ func (jq *RequestQueue) Len() int {
 	l := jq.lenUnsafe()
 	jq.rwmutex.RUnlock()
 	return l
+}
+
+func (jq *RequestQueue) Close() {
+	jq.rwmutex.Lock()
+	jq.open = false
+	jq.rwmutex.Unlock()
 }
 
 // Get the length of the queue in an unsafe manner

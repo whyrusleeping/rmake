@@ -23,6 +23,8 @@ type Builder struct {
 	dec     *gob.Decoder
 	list    net.Listener
 
+	tick *time.Ticker
+
 	ListenerAddr string
 	ManagerAddr  string
 
@@ -113,7 +115,10 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 func (b *Builder) FileSyncRoutine() {
 	for {
 		select {
-		case req := <-b.reqfilewait:
+		case req, ok := <-b.reqfilewait:
+			if !ok {
+				return
+			}
 			wpath := path.Join("builds", req.Session, req.File)
 			slog.Infof("Now waiting on: '%s'", wpath)
 			b.waitfile[wpath] = req.Reply
@@ -126,7 +131,7 @@ func (b *Builder) FileSyncRoutine() {
 			ch, ok := b.waitfile[wpath]
 			if !ok {
 				slog.Warnf("Received file nobody was asking for, session: '%s', path: '%s'",
-					fi.Session, fi.Payload.Path)
+				fi.Session, fi.Payload.Path)
 			}
 			ch <- fi.Payload
 			delete(b.waitfile, wpath)
@@ -151,10 +156,13 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 //for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
-		work := b.RequestQueue.Pop():
-			b.RunningJobs <- struct{}{}
-			b.RunJob(work)
-			<-b.RunningJobs
+		work,ok := b.RequestQueue.Pop()
+		if !ok {
+			return
+		}
+		b.RunningJobs <- struct{}{}
+		b.RunJob(work)
+		<-b.RunningJobs
 	}
 }
 
@@ -274,8 +282,12 @@ func (b *Builder) Run() {
 
 	slog.Info("Shutting down builder.")
 	b.Running = false
+	close(b.outgoing)
+	close(b.incoming)
+	b.tick.Stop()
 	b.list.Close()
 	b.manager.Close()
+	b.RequestQueue.Close()
 }
 
 func (b *Builder) Stop() {
@@ -311,7 +323,10 @@ func (b *Builder) ManagerListener() {
 //Synchronize sending messages to manager
 func (b *Builder) ManagerSender() {
 	for {
-		mes := <-b.outgoing
+		mes,ok := <-b.outgoing
+		if !ok {
+			return
+		}
 		err := b.enc.Encode(&mes)
 		if err != nil {
 			slog.Critical(err)
@@ -325,7 +340,10 @@ func (b *Builder) ManagerSender() {
 //asynchronously
 func (b *Builder) HandleMessages() {
 	for {
-		m := <-b.incoming
+		m,ok := <-b.incoming
+		if !ok {
+			return
+		}
 		switch message := m.(type) {
 		case *rmake.RequiredFileMessage:
 			slog.Info("Received required file.")
@@ -452,10 +470,15 @@ func (b *Builder) SendStatusUpdate() {
 }
 
 func (b *Builder) StartPublisher() {
-	tick := time.NewTicker(b.UpdateFrequency)
+	b.tick = time.NewTicker(b.UpdateFrequency)
 	for {
 		select {
-		case <-tick.C:
+		case t,ok := <-b.tick.C:
+			if !ok {
+				return
+			}
+			fmt.Sprint(t) //For some reason I cant not get 't' above
+
 			b.SendStatusUpdate()
 			//TODO: have a 'shutdown' channel
 		}
@@ -507,14 +530,14 @@ func main() {
 	// Arguement parsing
 	// Listen on ip and port
 	flag.StringVar(&listname, "listen", ":11222",
-		"The ip and or port to listen on")
+	"The ip and or port to listen on")
 	flag.StringVar(&listname, "l", ":11222",
-		"The ip and or port to listen on (shorthand)")
+	"The ip and or port to listen on (shorthand)")
 	// Manager ip and port
 	flag.StringVar(&manager, "manager", ":11221",
-		"Address and port of manager node")
+	"Address and port of manager node")
 	flag.StringVar(&manager, "m", ":11221",
-		"Address and port of manager node (shorthand)")
+	"Address and port of manager node (shorthand)")
 	// Avaliable processors
 	flag.IntVar(&procs, "p", 2, "Number of processors to use.")
 
