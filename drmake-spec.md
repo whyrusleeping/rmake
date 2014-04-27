@@ -46,19 +46,29 @@ The manager servers as an intermediary between the client and the builder server
 ###Job Scheduling
 The manager maintains a priority queue of all builder nodes in its network. When a job, or several jobs, are recieved from a client, the manager pops the 'least busy' node off of its queue, assigns it a job, and pushes it back into the queue. This way, load it fairly balanced across the cluster.
 The manager also recieves periodic updates from the builder using a publish subscribe style system, giving a more accurate depiction of its current load, upon recieving this information, the manager updates the builders position in the queue.
+The managers priority queue for builder nodes is implemented as a min heap with a single underlying array. Each element in the queue knows its index in the array to allow for easy updating of priorities when status updates are received from builders.
 
 ###Job Updates
-As different build nodes complete their jobs, notifications of that event are sent to the manager where they are collected and relayed to the client.
+As different build nodes complete their jobs, notifications of that event are sent to the manager where they are collected and relayed to the client. Builders send an update on a specific time interval as well as on completion of various jobs.
 
 ###Sessions
 When a client connects to the manager, the manager creates a session ID for it. This session ID is used to mark jobs on the builders so that they can talk to each other more easily. Currently, sessions IDs are not reused, but in the future we will use them to speed up builds by only rebuilding files changes since the last build.
 
 ###Build Failures
-When a build fails, due to poorly written code or other compiler errors, the manager notifies all the builders that they should stop working on that build, the builders the go through their queue of jobs and remove any associated with that build. And then notifies the client that their build has failed, complete with compiler error messages.
+When a build fails, due to poorly written user code or other compiler errors, the manager notifies all the builders that they should stop working on that build, the builders the go through their queue of jobs and remove any associated with that build. And then notifies the client that their build has failed, complete with compiler error messages.
 
 ##Builder (rmakebuilder)
 The builder is responsible for accepting jobs from the manager, performing them, and send the output either back to the manager, or to another builder node as part of a later job.
 When starting up a builder, you can specify a maximum number of processes to have running at any given time. For highest efficiency, let this number either be equal to, or one less than the number of logical processors on the build machine. Lower numbers can be used if this machine has other things it needs to be doing at the same time as building.
+
+Example Usage:
+
+    rmakebuilder -l :12345 -m 10.5.5.2:12344 -p 8
+
+This command would connect to a manager node at 10.5.5.2 on port 12344, open a listener on port 12345 and use at most eight threads for building.
+
+##Types
+The types package (located in pkg/types) declares a set of objects that are used to communicate between the three different programs. The init function in the package registers each of the types with [Go`s 'gob' encoder](http://golang.org/pkg/encoding/gob) to ensure consistent serialization and deserialization. 
 
 ##Roadmap for the future
 - Makefile parsing
@@ -67,3 +77,4 @@ When starting up a builder, you can specify a maximum number of processes to hav
 - persistent build sessions (for unchanged file reuse)
 - robust easy to use frontend (cli)
 - automatic dependency resolution
+- visual dependency graphs
