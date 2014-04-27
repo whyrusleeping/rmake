@@ -7,8 +7,7 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/whyrusleeping/rmake/types"
+	"github.com/whyrusleeping/rmake/pkg/types"
 )
 
 //Test builder sending load updates

@@ -1,11 +1,11 @@
-package main
+package builder
 
 import (
-	"time"
-	"os"
 	"bufio"
-	"strings"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 )
 
 func getStatNums() []int {
-	sfi,err := os.Open("/proc/stat")
+	sfi, err := os.Open("/proc/stat")
 	if err != nil {
 		//Who cares!
 	}
@@ -29,10 +29,10 @@ func getStatNums() []int {
 	if spl[1] == "" {
 		n++
 	}
-	out[USER],_ = strconv.Atoi(spl[n + 1])
-	out[NICE],_ = strconv.Atoi(spl[n + 2])
-	out[SYSTEM],_ = strconv.Atoi(spl[n + 3])
-	out[IDLE],_ = strconv.Atoi(spl[n + 4])
+	out[USER], _ = strconv.Atoi(spl[n+1])
+	out[NICE], _ = strconv.Atoi(spl[n+2])
+	out[SYSTEM], _ = strconv.Atoi(spl[n+3])
+	out[IDLE], _ = strconv.Atoi(spl[n+4])
 	return out
 }
 
@@ -41,9 +41,9 @@ func GetCpuUsage() float32 {
 	time.Sleep(time.Second)
 	pollb := getStatNums()
 	sum := 0
-	for i,v := range polla {
+	for i, v := range polla {
 		pollb[i] -= v
 		sum += pollb[i]
 	}
-	return float32(sum - pollb[3]) / float32(sum)
+	return float32(sum-pollb[3]) / float32(sum)
 }

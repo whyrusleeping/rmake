@@ -1,10 +1,9 @@
-package main
+package manager
 
 import (
 	"crypto/rand"
 	"encoding/hex"
-
-	"github.com/whyrusleeping/rmake/types"
+	"github.com/whyrusleeping/rmake/pkg/types"
 )
 
 type Session struct {

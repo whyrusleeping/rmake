@@ -5,7 +5,10 @@ rmakebuilder/rmakebuilder
 rmakemanager/rmakemanager
 
 # Vim
-.*.sw*
+**/.*.sw*
+
+#Gedit
+**/*~
 
 #rmake conf file
 rmake.json

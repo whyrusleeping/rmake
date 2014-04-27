@@ -1,9 +1,9 @@
-package main
+package builder
 
 import (
 	"sync"
 
-	"github.com/whyrusleeping/rmake/types"
+	"github.com/whyrusleeping/rmake/pkg/types"
 )
 
 // The RequestQueue
