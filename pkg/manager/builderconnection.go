@@ -62,12 +62,11 @@ func (b *BuilderConnection) Listener() {
 			b.conn.Close()
 			return
 		}
-		slog.Info("Recieved message from builder.")
 		b.Incoming <- i
 	}
 }
 
-// The sender
+// waits for messages from the manager and sends them off to the builder
 func (b *BuilderConnection) Sender() {
 	for {
 		i := <-b.Outgoing
