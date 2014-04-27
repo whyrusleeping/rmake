@@ -6,7 +6,7 @@ type BuilderQueue struct {
 	// The backing datastructure
 	arr []*BuilderConnection
 	// Mutex to lock on push and pop
-	rwmutex sync.RWMutex
+	mut sync.Mutex
 	//Sorting Comparison function
 	cmp func(*BuilderConnection, *BuilderConnection) bool
 }
@@ -24,20 +24,20 @@ func NewBuilderQueue() *BuilderQueue {
 // Push a new builder connection on to the queue
 // Locks the mutex
 func (q *BuilderQueue) Push(bc *BuilderConnection) {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 
 	i := len(q.arr)
 	bc.Index = i
 	q.arr = append(q.arr, bc)
 	q.percUpUnsafe(i)
 
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 }
 
 // Pop the lowest usage builder connection from the queue
 // Locks the mutex
 func (q *BuilderQueue) Pop() *BuilderConnection {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 
 	ret := q.arr[1]
 	q.arr[1] = q.arr[len(q.arr)-1]
@@ -45,34 +45,34 @@ func (q *BuilderQueue) Pop() *BuilderConnection {
 	q.arr = q.arr[:len(q.arr)-1]
 	q.percDownUnsafe(1)
 
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 	return ret
 }
 
 // Peeks at the top item on the queue
-// RLocks the mutex
+// Locks the mutex
 func (q *BuilderQueue) Peek() *BuilderConnection {
-	q.rwmutex.RLock()
+	q.mut.Lock()
 	p := q.arr[1]
-	q.rwmutex.RUnlock()
+	q.mut.Unlock()
 	return p
 }
 
 // Get the length of the queue
-// RLocks the mutex
+// Locks the mutex
 func (q *BuilderQueue) Len() int {
-	q.rwmutex.RLock()
+	q.mut.Lock()
 	l := len(q.arr) - 1
-	q.rwmutex.RUnlock()
+	q.mut.Unlock()
 	return l
 }
 
 // Swap two items
 // Locks the mutex
 func (q *BuilderQueue) Swap(i, j int) {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 	q.swapUnsafe(i, j)
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 }
 
 // Swap to items
@@ -84,15 +84,15 @@ func (q *BuilderQueue) swapUnsafe(i, j int) {
 }
 
 // Percolate Up
-// Locks the rwmutex
+// Locks the mut
 func (q *BuilderQueue) PercUp(from int) {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 	q.percUpUnsafe(from)
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 }
 
 // Percolate Up
-// Does not lock the rwmutex
+// Does not lock the mut
 func (q *BuilderQueue) percUpUnsafe(from int) {
 	for from > 1 {
 		if q.cmp(q.arr[from/2], q.arr[from]) {
@@ -105,15 +105,15 @@ func (q *BuilderQueue) percUpUnsafe(from int) {
 }
 
 // Percolate down
-// Locks the rwmutex
+// Locks the mut
 func (q *BuilderQueue) PercDown(from int) {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 	q.percDownUnsafe(from)
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 }
 
 // Percolate down
-// Does not lock the rwmutex
+// Does not lock the mut
 func (q *BuilderQueue) percDownUnsafe(from int) {
 	for from*2 < len(q.arr) {
 		left := from * 2
@@ -147,9 +147,9 @@ func (q *BuilderQueue) percDownUnsafe(from int) {
 // Remove the item at i from the queue
 // This method locks the mutex
 func (q *BuilderQueue) Remove(i int) {
-	q.rwmutex.Lock()
+	q.mut.Lock()
 	q.removeUnsafe(i)
-	q.rwmutex.Unlock()
+	q.mut.Unlock()
 }
 
 // Remove the item at i from the queue

@@ -57,15 +57,21 @@ func printHelp(which string) {
 		printHelpVar()
 	case "status":
 		printHelpStatus()
+	case "all":
+		printHelpAll()
 	default:
-		fmt.Println("Usage: rmake [command] [args...]")
-		printHelpAdd()
-		printHelpBin()
-		printHelpScr()
-		printHelpServer()
-		printHelpClean()
-		printHelpVar()
-		printHelpCompress()
-		printHelpStatus()
+		fmt.Printf("Unknown command '%s'.\n", which)
 	}
+}
+
+func printHelpAll() {
+	fmt.Println("Usage: rmake [command] [args...]")
+	printHelpAdd()
+	printHelpBin()
+	printHelpScr()
+	printHelpServer()
+	printHelpClean()
+	printHelpVar()
+	printHelpCompress()
+	printHelpStatus()
 }

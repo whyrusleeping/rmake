@@ -7,7 +7,7 @@ import (
 	slog "github.com/cihub/seelog"
 )
 
-// Builder Connection Type
+// BuilderConnection handles communications with a certain rmake builder node.
 type BuilderConnection struct {
 	// The builder's uuid
 	UUID int
@@ -58,7 +58,8 @@ func (b *BuilderConnection) Listener() {
 		if err != nil {
 			slog.Critical(err)
 
-			//TEMP! only for debugging
+			//TODO: remove this builder from the managers queue
+			b.Outgoing <- nil
 			b.conn.Close()
 			return
 		}
@@ -71,6 +72,10 @@ func (b *BuilderConnection) Listener() {
 func (b *BuilderConnection) Sender() {
 	for {
 		i := <-b.Outgoing
+		if i == nil {
+			slog.Warn("Received nil message. Shutting down connection to '%s'.", b.Hostname)
+			return
+		}
 		err := b.enc.Encode(&i)
 		if err != nil {
 			panic(err)

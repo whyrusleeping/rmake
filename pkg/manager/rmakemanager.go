@@ -215,6 +215,9 @@ func (m *Manager) HandleManagerRequest(request *rmake.BuildPackage, c net.Conn) 
 		}
 
 		builder := m.queue.Pop()
+		if builder == final {
+			br.ResultAddress = ""
+		}
 		log.Infof("Sending job to '%s'\n", builder.Hostname)
 		builder.Outgoing <- br
 		builder.NumJobs++

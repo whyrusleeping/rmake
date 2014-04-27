@@ -1,3 +1,4 @@
+//This is the user facing code the for rmakebuilder program
 package main
 
 import (

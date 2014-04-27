@@ -1,3 +1,5 @@
+//Package builder provides the data structures and methods for the builder struct
+//that is responsible for performing builds in an rmake cluster
 package builder
 
 import (
@@ -42,6 +44,7 @@ type Builder struct {
 	Procs int
 	UUID  int
 
+	//Channel to signal that the builder should shutdown
 	Halt chan struct{}
 
 	RequestQueue *RequestQueue
@@ -131,6 +134,8 @@ func (b *Builder) FileSyncRoutine() {
 }
 
 //Register a listener for receiving a certain file
+//The requested file will be sent on the returned channel when it
+//is received.
 func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 	fw := new(FileWait)
 	fw.File = file
@@ -200,7 +205,6 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	b.SendToManager(resp)
 
 	if req.ResultAddress == "" {
-		//Actually... shouldnt happen
 		slog.Info("Im the final node! no need to send.")
 		return
 	}

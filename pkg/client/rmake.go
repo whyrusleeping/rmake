@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -50,22 +49,8 @@ type RMakeConf struct {
 	ignore []string `json:",omitempty"`
 }
 
-//Check to make sure that all the files required by all the jobs are added
+//Perform dependency analysis
 func (rmc *RMakeConf) Validate() error {
-	for _, j := range rmc.Jobs {
-		for _, dep := range j.Deps {
-			found := false
-			for _, f := range rmc.Files {
-				if f.Path == dep {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return errors.New(fmt.Sprintf("'%s' not found!", dep))
-			}
-		}
-	}
 	return nil
 }
 
@@ -87,6 +72,13 @@ func (rmc *RMakeConf) LoadIgnores(igfile string) {
 	for scan.Scan() {
 		rmc.ignore = append(rmc.ignore, scan.Text())
 	}
+}
+
+func (rmc *RMakeConf) AddFile(path string) {
+	fi := new(rmake.FileInfo)
+	fi.Path = path
+	fi.LastTime = time.Now().AddDate(-20, 0, 0)
+	rmc.Files = append(rmc.Files, fi)
 }
 
 //Reset all file modtimes to be in the past
