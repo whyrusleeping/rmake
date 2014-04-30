@@ -95,7 +95,6 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.reqfilewait = make(chan *FileWait)
 
 	b.RequestQueue = NewRequestQueue()
-	//b.JQueue = make(chan *rmake.BuilderRequest)
 	b.RunningJobs = make(chan struct{}, nprocs)
 
 	b.UpdateFrequency = time.Second * 60
@@ -307,7 +306,9 @@ func (b *Builder) ManagerListener() {
 				b.DoHandshake()
 				continue
 			} else {
-				panic(err)
+				slog.Critical(err)
+				b.Stop()
+				return
 			}
 		}
 		b.incoming <- mes
@@ -341,7 +342,6 @@ func (b *Builder) HandleMessages() {
 		case *rmake.BuilderRequest:
 			slog.Info("Received builder request.")
 			b.RequestQueue.Push(message)
-			//b.JQueue <- messag/e
 
 		case *rmake.BuilderResult:
 			slog.Info("Received builder result.")
@@ -372,10 +372,11 @@ func (b *Builder) SocketListener() {
 			slog.Error(err)
 			if b.Running {
 				//Diagnose?
-				slog.Errorf("Listener Error: %s", err)
-				continue
+				slog.Criticalf("Listener Error: %s", err)
+				b.Stop()
+				return
 			} else {
-				slog.Error("Shutting down server socket...")
+				slog.Warn("Shutting down server socket...")
 				return
 			}
 		}
@@ -411,7 +412,6 @@ func (b *Builder) HandleMessage(i interface{}) {
 	case *rmake.BuilderRequest:
 		slog.Info("Received builder request.")
 		b.RequestQueue.Push(message)
-		//b.JQueue <- message
 
 	case *rmake.BuilderResult:
 		slog.Info("Received builder result.")
@@ -441,7 +441,7 @@ func (b *Builder) HandleConnection(con net.Conn) {
 		slog.Error(err)
 		return
 	}
-	//b.HandleMessage(i)
+
 	// We'll only handle one message ber connection
 	b.incoming <- i
 	con.Close()
@@ -451,7 +451,7 @@ func (b *Builder) SendStatusUpdate() {
 	slog.Info("Sending system load update!")
 	stat := new(rmake.BuilderStatusUpdate)
 	stat.CPULoad = GetCpuUsage()
-	stat.QueuedJobs = b.RequestQueue.Len() //len(b.JQueue)
+	stat.QueuedJobs = b.RequestQueue.Len()
 	stat.RunningJobs = len(b.RunningJobs)
 
 	b.SendToManager(stat)

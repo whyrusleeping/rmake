@@ -60,6 +60,7 @@ func (b *BuilderConnection) Listener() {
 
 			//TEMP! only for debugging
 			b.conn.Close()
+			b.Incoming <- b
 			return
 		}
 		b.Incoming <- i
