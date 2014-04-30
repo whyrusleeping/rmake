@@ -84,7 +84,8 @@ func main() {
 	case "var":
 		rmc.Vars[os.Args[2]] = os.Args[3]
 	case "check":
-		err := rmc.Validate()
+		tr,err := rmc.MakeDepTree()
+		tr.Print()
 		if err != nil {
 			fmt.Println(err)
 		} else {

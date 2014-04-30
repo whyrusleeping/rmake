@@ -90,6 +90,34 @@ func (rmc *RMakeConf) Clean() {
 	rmc.Session = ""
 }
 
+//For use on the client to ensure a complete build
+func (rmc *RMakeConf) MakeDepTree() (*rmake.DepTreeNode, error) {
+	jobbyout := make(map[string]*rmake.Job)
+	for _,j := range rmc.Jobs {
+		jobbyout[j.Output] = j
+	}
+
+	final,ok := jobbyout[rmc.Output]
+	if !ok {
+		return nil,fmt.Errorf("Could not find job for final output.")
+	}
+	delete(jobbyout, rmc.Output)
+
+	fi := make(map[string]bool)
+	for _,f := range rmc.Files {
+		fi[f.Path] = true
+	}
+	root := new(rmake.DepTreeNode)
+	root.Result = rmc.Output
+	root.Type = rmake.TBuild
+	err := root.Build(final.Deps, jobbyout, fi)
+	if err != nil {
+		return nil, err
+	}
+
+	return root,nil
+}
+
 //TODO: as part of the 'rmakeignore' file, check whether or not
 //a given file is ignored
 func (rmc *RMakeConf) IsIgnored(fi string) bool {

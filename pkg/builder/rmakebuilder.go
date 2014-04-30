@@ -152,7 +152,10 @@ func (b *Builder) WaitForFile(session, file string) chan *rmake.File {
 //for clean shutdowns
 func (b *Builder) BuilderThread() {
 	for {
-		work := b.RequestQueue.Pop()
+		work,ok := b.RequestQueue.Pop()
+		if !ok {
+			return
+		}
 		b.RunningJobs <- struct{}{}
 		b.RunJob(work)
 		<-b.RunningJobs
@@ -274,6 +277,10 @@ func (b *Builder) Run() {
 
 	slog.Info("Shutting down builder.")
 	b.Running = false
+	close(b.outgoing)
+	close(b.incoming)
+	close(b.reqfilewait)
+	b.RequestQueue.Close()
 	b.list.Close()
 	b.manager.Close()
 }
@@ -301,7 +308,9 @@ func (b *Builder) ManagerListener() {
 				b.DoHandshake()
 				continue
 			} else {
-				panic(err)
+				slog.Critical(err)
+				b.Stop()
+				return
 			}
 		}
 		b.incoming <- mes
@@ -365,10 +374,11 @@ func (b *Builder) SocketListener() {
 			slog.Error(err)
 			if b.Running {
 				//Diagnose?
-				slog.Errorf("Listener Error: %s", err)
-				continue
+				slog.Criticalf("Listener Error: %s", err)
+				b.Stop()
+				return
 			} else {
-				slog.Error("Shutting down server socket...")
+				slog.Warn("Shutting down server socket...")
 				return
 			}
 		}

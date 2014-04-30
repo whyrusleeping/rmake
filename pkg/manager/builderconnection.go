@@ -59,8 +59,8 @@ func (b *BuilderConnection) Listener() {
 			slog.Critical(err)
 
 			//TODO: remove this builder from the managers queue
-			b.Outgoing <- nil
 			b.conn.Close()
+			b.Incoming <- b
 			return
 		}
 		slog.Info("Recieved message from builder.")
@@ -68,12 +68,11 @@ func (b *BuilderConnection) Listener() {
 	}
 }
 
-// The sender
+// waits for messages from the manager and sends them off to the builder
 func (b *BuilderConnection) Sender() {
 	for {
-		i := <-b.Outgoing
-		if i == nil {
-			slog.Warn("Received nil message. Shutting down connection to '%s'.", b.Hostname)
+		i,ok := <-b.Outgoing
+		if !ok {
 			return
 		}
 		err := b.enc.Encode(&i)

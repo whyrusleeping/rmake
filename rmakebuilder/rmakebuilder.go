@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 
+	log "github.com/cihub/seelog"
 	"github.com/whyrusleeping/rmake/pkg/builder"
 )
 
@@ -35,7 +36,8 @@ func main() {
 		return
 	}
 
-	fmt.Println("rmakebuilder")
+	log.Info("Running as:")
+	log.Infof("rmakebuilder -l %s -m %s -p %d\n", listname, manager, procs)
 	if b := builder.NewBuilder(listname, manager, procs); b != nil {
 		b.DoHandshake()
 		// Start the builder

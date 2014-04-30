@@ -47,6 +47,13 @@ func NewManager(listname string) *Manager {
 	return m
 }
 
+func (m *Manager) Shutdown() {
+	close(m.Incoming)
+	for _,b := range m.queue.arr {
+		close(b.Outgoing)
+	}
+}
+
 func (m *Manager) SendToClient(session string, mes interface{}) {
 	ch, ok := m.sessions[session]
 	if ok {
@@ -83,6 +90,8 @@ func (m *Manager) MessageListener() {
 
 		case *rmake.BuilderStatusUpdate:
 			log.Info("Builder updated load")
+		case *BuilderConnection:
+			m.queue.Remove(mes.Index)
 		default:
 			log.Warn("Unrecognized message type")
 			log.Warn(reflect.TypeOf(mes))

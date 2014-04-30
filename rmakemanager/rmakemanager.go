@@ -18,7 +18,8 @@ func main() {
 
 	flag.Parse()
 
-	log.Info("rmakemanager")
+	log.Info("Running as:")
+	log.Infof("rmakemanager -l %s", listname)
 
 	manager := manager.NewManager(listname)
 	manager.Start()
