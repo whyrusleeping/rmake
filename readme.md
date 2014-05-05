@@ -20,13 +20,15 @@ Next set the servers location with
 
     rmake server myserver.com:1234
 	
-Set your build command with 
+Now youll need to create jobs that will be run.
 
-    rmake scr "make -j 500"
-	
-And finally, set the name of the binary you want sent back: 
+    rmake job add "gcc -c main.c" main.o main.c header.h
 
-    rmake bin a.out
+This command would add a job that depends on main.c and header.h, runs "gcc -c main.c" and outputs main.o. This syntax is not finalized and suggestions for a better method are very welcome!
+
+And finally, set the name of the output you want sent back: 
+
+    rmake out a.out
 	
 As of now, rmake only supports the return of a single file, if it is needed, support for returning multiple files can be added.
 
@@ -34,18 +36,7 @@ After all that, simple run `rmake` to perform a build! Its that easy!
 
 ##Extra Options
 
-If needed, you can change the compression level used for communication between the client and the build server.
-
-	//Use best compression (higher CPU use)
-    rmake compress best
-
-	//Use fastest compression (Higher bandwidth costs)
-	rmake compress fast
-
-	//Dont use compression (no extra CPU cost, high bandwidth cost)
-	rmake compress none
-
-Another feature rmake provides is the ability to specify environment variables for the servers build environment.
+rmake provides the ability to specify environment variables for the servers build environment.
 
 	rmake var CFLAGS "-O2 -g -Wall"
 	rmake var CXX clang++

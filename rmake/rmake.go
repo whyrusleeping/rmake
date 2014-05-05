@@ -77,7 +77,7 @@ func main() {
 		}
 	case "server":
 		rmc.Server = os.Args[2]
-	case "bin":
+	case "out":
 		rmc.Output = os.Args[2]
 	case "clean":
 		rmc.Clean()
