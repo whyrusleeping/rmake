@@ -37,6 +37,7 @@ type Builder struct {
 	//Some data structures to synchronize file transfers
 	waitfile    map[string]chan *rmake.File
 	reqfilewait chan *FileWait
+	localfiles  chan []string //session, filepath
 	newfiles    chan *rmake.RequiredFileMessage
 
 	mgrReconnect chan struct{}
@@ -94,6 +95,7 @@ func NewBuilder(listen string, manager string, nprocs int) *Builder {
 	b.newfiles = make(chan *rmake.RequiredFileMessage)
 	b.waitfile = make(map[string]chan *rmake.File)
 	b.reqfilewait = make(chan *FileWait)
+	b.localfiles = make(chan []string)
 
 	b.RequestQueue = NewRequestQueue()
 	b.RunningJobs = make(chan struct{}, nprocs)
@@ -128,6 +130,15 @@ func (b *Builder) FileSyncRoutine() {
 					fi.Session, fi.Payload.Path)
 			}
 			ch <- fi.Payload
+			delete(b.waitfile, wpath)
+		case fi := <-b.localfiles:
+			wpath := path.Join("builds", fi[0], fi[1])
+			ch, ok := b.waitfile[wpath]
+			if !ok {
+				slog.Warnf("Received file nobody was asking for, session: '%s', path: '%s'",
+					fi[0], fi[1])
+			}
+			ch <- nil
 			delete(b.waitfile, wpath)
 		}
 	}
@@ -165,6 +176,7 @@ func (b *Builder) BuilderThread() {
 //
 func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 	slog.Infof("Starting job for session: '%s'\n", req.Session)
+	slog.Info(req.BuildJob)
 	sdir := path.Join("builds", req.Session)
 	os.Mkdir(sdir, 0777|os.ModeDir)
 
@@ -188,8 +200,12 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	for _, ch := range waitlist {
 		f := <-ch
-		slog.Infof("Got file we were waiting for: '%s'", f.Path)
-		f.Save(sdir)
+		if f == nil {
+			slog.Info("Got notified of local file.")
+		} else {
+			slog.Infof("Got file we were waiting for: '%s'", f.Path)
+			f.Save(sdir)
+		}
 	}
 
 	resp := new(rmake.JobFinishedMessage)
@@ -209,6 +225,7 @@ func (b *Builder) RunJob(req *rmake.BuilderRequest) {
 
 	if req.ResultAddress == "" {
 		slog.Info("Im the final node! no need to send.")
+		b.localfiles <- []string{req.Session, req.BuildJob.Output}
 		return
 	}
 

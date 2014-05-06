@@ -212,6 +212,7 @@ func (m *Manager) HandleManagerRequest(request *rmake.BuildPackage, c net.Conn) 
 
 		br.Session = session
 		br.ResultAddress = final.ListenerAddr
+		log.Infof("job gets sent to: %s", br.ResultAddress)
 
 		for _, dep := range j.Deps {
 			depfi, ok := request.Files[dep]
