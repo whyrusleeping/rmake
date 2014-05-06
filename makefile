@@ -13,7 +13,7 @@ ifeq ($(OS), $(filter $(OS), linux darwin windows))
 	endif
 endif
 
-.PHONY: all clean test
+.PHONY: all clean dep test
 
 # Build everything
 all:
@@ -31,3 +31,8 @@ clean:
 # Tests for rmake
 test:
 	cd rmakebuilder && go test
+
+# Dependencies 
+dep:
+	go get -u github.com/dustin/go-humanize
+	go get -u github.com/cihub/seelog
