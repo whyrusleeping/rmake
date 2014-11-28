@@ -59,3 +59,6 @@ Then, simply:
 	go get github.com/whyrusleeping/rmake/rmakebuilder
 	
 Feedback, bug reports and feature requests are very much appreciated and wanted!
+
+## License
+This project is under an MIT license.
